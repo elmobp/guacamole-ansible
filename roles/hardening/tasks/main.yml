@@ -179,14 +179,28 @@
       when: guac_hardening_time_sync | bool
       notify: Restart chrony
 
-    - name: Enable chrony
+    - name: Enable chrony (persistent — starts on boot)
       ansible.builtin.service:
         name: "{{ 'chronyd' if ansible_os_family == 'RedHat' else 'chrony' }}"
-        state: started
         enabled: true
       when:
         - guac_hardening_time_sync | bool
         - not (guac_container_build | bool)
+      failed_when: false
+
+    # chrony.service on Ubuntu 26.04 carries ConditionVirtualization=|!container, so
+    # `state: started` never settles inside a container and reports changed on every
+    # run. Real hosts still get chrony running immediately; containers rely on the
+    # enable above (the daemon is not useful in a container anyway).
+    - name: Start chrony now (skipped in containers)
+      ansible.builtin.service:
+        name: "{{ 'chronyd' if ansible_os_family == 'RedHat' else 'chrony' }}"
+        state: started
+      when:
+        - guac_hardening_time_sync | bool
+        - not (guac_container_build | bool)
+        - "'container' not in (ansible_virtualization_tech_guest | default([]))"
+        - ansible_virtualization_type not in ['container', 'podman', 'docker', 'lxc', 'systemd-nspawn', 'wsl']
       failed_when: false
 
     # --- Central log forwarding (plain, TLS, or RELP+TLS) ---------

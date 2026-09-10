@@ -1,9 +1,9 @@
 ---
 gsd_state_version: "1.0"
-status: unknown
-stopped_at: context exhaustion at 75% (2026-09-10)
-last_updated: "2026-09-10T20:59:34.599Z"
-state_head: dfa771e9624fb26be372239e49120d2544538aa6
+status: in-progress
+stopped_at: milestone-1 matrix validation (ubuntu2604 idempotence)
+last_updated: "2026-09-11T06:00:00.000Z"
+state_head: 1b85215
 ---
 
 # Project State
@@ -15,16 +15,18 @@ See: .planning/PROJECT.md · Roadmap: .planning/ROADMAP.md · Requirements: .pla
 **Core value:** `ansible-playbook site.yml` on a fresh supported host → working Guacamole login
 over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is idempotent.
 
-## Paused: 2026-09-10 — HEAD `f980ea5` (43 commits) — working tree clean, no containers running
+## Active: 2026-09-11 — milestone-1 full-matrix validation (post FreeRDP-3.15 + block-notify fixes)
 
 ## Milestone 1 (Phases 1–9)
 
 | Area | State |
 |---|---|
 | RHEL 9 / RHEL 10 | ✅ validated — fresh container, full `site.yml` (all 9 roles), idempotent `changed=0`, guacadmin login via HTTPS proxy |
-| Debian 12 | ✅ validated — full build, idempotent `changed=0`, checks green (deb3.log) |
-| Debian 13 | ✅ validated — full build, idempotent `changed=0`, checks green (deb4.log); needed FreeRDP-3.15 fix `a5c006c` (`guac_server_configure_cppflags`) |
-| Ubuntu 22.04 / 24.04 / 26.04 | ◆ running now (deb4.log) — 24.04/26.04 exercise the same FreeRDP 3.x path |
+| Debian 12 | ✅ validated — full build, idempotent `changed=0`, checks green |
+| Debian 13 | ✅ validated — full build, idempotent `changed=0`, checks green; needed FreeRDP-3.15 fix `a5c006c` (`guac_server_configure_cppflags`) |
+| Ubuntu 22.04 | ✅ validated — full build, idempotent `changed=0`, checks green; needed block-notify fix `1b85215` |
+| Ubuntu 24.04 | ✅ validated — full build, idempotent `changed=0`, checks green (FreeRDP 3.x path) |
+| Ubuntu 26.04 | 🟡 build + checks green; idempotence shows 1 persistent `changed` task — under investigation (re-run w/ KEEP=1) |
 | 9 roles (common, database, guacd, guacamole_client, nginx_proxy, guac_extensions, connections, backup, hardening) | ✅ implemented |
 | Docs: README + INSTALL/CONFIGURE/SCENARIOS/OPERATIONS/FIREWALL/LLD-RHEL-IRAP + architecture.drawio | ✅ |
 | container/ (Containerfile + compose + entrypoint) | ◆ implemented, image build not yet smoke-tested |
@@ -45,21 +47,24 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
 | 17 operator manual → PDF | ○ planned |
 | 18/19/20 | ❌ descoped 2026-09-11 (Puppet/Nix/Chef/Terraform + AWS + Azure) | |
 
-## Phases 10–14 — NOT yet run live (context ran out). Validate with:
+## Validation status (2026-09-11)
+
+- Full 7-distro matrix run: **ol9, ol10, debian12, debian13, ubuntu2204, ubuntu2404 all green**
+  (full `site.yml`, idempotent `changed=0`, `check.sh` all green).
+- **ubuntu2604**: build + checks green; 1 persistent non-idempotent task — investigating.
+- Still TODO: `test/dr.sh ol9`, `test/upgrade.sh ol9 1.5.5 1.6.0`, `podman build` image smoke,
+  phase-11 source-ref smoke (`-e guac_source_ref=1.6.0` on ol9).
 
 ```
 cd ~/Documents/Projects/claude
-test/run.sh ol9                                  # smoke the base + hardening + connections + LB
-test/run.sh ol9 -k ; podman exec guac-test-ol9 ansible-playbook /root/guac/site.yml -e guac_source_ref=1.6.0   # phase 11
-test/run.sh debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2604   # finish milestone-1 matrix
 test/dr.sh ol9 ; test/upgrade.sh ol9 1.5.5 1.6.0
 podman build -t guacamole-appliance:local -f container/Containerfile .
 ```
 
 ## Resume
 
-Say "resume". Next sensible work: run the validation block above and fix fallout, OR start
-Phase 15/16/17, OR (with a decision) Phase 18, OR (with creds) Phase 19/20.
+Say "resume". Next: close out ubuntu2604 idempotence, then dr/upgrade/image smoke,
+then Phase 15 (CIS L2) / 16 (ISM+LLD) / 17 (PDF manual).
 
 ## Notes
 
