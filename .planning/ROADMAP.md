@@ -103,7 +103,7 @@ extensions, and the two-distro test harness.
 
 ## Milestone 2 — requested 2026-09-10 (sized honestly, sequenced)
 
-**Phases 10-14 implemented 2026-09-10 (code committed; validate via CI or `test/run.sh`).**
+**Phases 10-14 implemented + validated on OL9 (2026-09-11): base PASS, M2 smoke failed=0, idempotent, BALANCING/RBAC/TLS-syslog asserted.**
 
 Pick phases to run; they are mostly independent. Sizes: **S** ≈ hours, **M** ≈ a day, **L** ≈ multi-day, **XL** ≈ a project.
 
