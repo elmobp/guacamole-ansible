@@ -26,7 +26,7 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
 | Debian 13 | ✅ validated — full build, idempotent `changed=0`, checks green; needed FreeRDP-3.15 fix `a5c006c` (`guac_server_configure_cppflags`) |
 | Ubuntu 22.04 | ✅ validated — full build, idempotent `changed=0`, checks green; needed block-notify fix `1b85215` |
 | Ubuntu 24.04 | ✅ validated — full build, idempotent `changed=0`, checks green (FreeRDP 3.x path) |
-| Ubuntu 26.04 | 🟡 build + checks green; idempotence shows 1 persistent `changed` task — under investigation (re-run w/ KEEP=1) |
+| Ubuntu 26.04 | ✅ validated — full build, idempotent `changed=0`, checks green; needed chrony fix `b359f52` |
 | 9 roles (common, database, guacd, guacamole_client, nginx_proxy, guac_extensions, connections, backup, hardening) | ✅ implemented |
 | Docs: README + INSTALL/CONFIGURE/SCENARIOS/OPERATIONS/FIREWALL/LLD-RHEL-IRAP + architecture.drawio | ✅ |
 | container/ (Containerfile + compose + entrypoint) | ◆ implemented, image build not yet smoke-tested |
@@ -49,9 +49,10 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
 
 ## Validation status (2026-09-11)
 
-- Full 7-distro matrix run: **ol9, ol10, debian12, debian13, ubuntu2204, ubuntu2404 all green**
-  (full `site.yml`, idempotent `changed=0`, `check.sh` all green).
-- **ubuntu2604**: build + checks green; 1 persistent non-idempotent task — investigating.
+- **Full 7-distro matrix GREEN**: ol9, ol10, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2604
+  — full `site.yml`, idempotent `changed=0`, `check.sh` all green.
+- Session fixes: FreeRDP 3.15 build (`a5c006c`), block-notify→task-notify (`1b85215`),
+  run.sh failure propagation (`ea1f39b`) + source guard (`aeafb87`), chrony/26.04 idempotence (`b359f52`).
 - Still TODO: `test/dr.sh ol9`, `test/upgrade.sh ol9 1.5.5 1.6.0`, `podman build` image smoke,
   phase-11 source-ref smoke (`-e guac_source_ref=1.6.0` on ol9).
 
