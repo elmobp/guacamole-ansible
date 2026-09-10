@@ -33,9 +33,10 @@ run_one() {
     -v "${REPO_ROOT}:/opt/guac-ansible:ro,Z" \
     "$image" /sbin/init
 
-  # Wait for systemd to be ready
+  # Wait for systemd to finish booting (running or degraded both fine in a container)
   for _ in $(seq 1 30); do
-    if podman exec "$ctr" systemctl is-system-running --wait >/dev/null 2>&1; then break; fi
+    state=$(podman exec "$ctr" systemctl is-system-running 2>/dev/null || true)
+    [[ "$state" == "running" || "$state" == "degraded" ]] && break
     sleep 2
   done
 
@@ -59,11 +60,11 @@ run_one() {
 
   # Idempotence run — assert zero changed
   echo ">>> $tag :: idempotence check"
-  podman exec "$ctr" bash -lc '
+  podman exec -e ANSIBLE_NOCOLOR=1 -e ANSIBLE_FORCE_COLOR=0 "$ctr" bash -lc '
     cd /root/guac
     out=$(ansible-playbook site.yml 2>&1)
-    echo "$out" | tail -n 20
-    echo "$out" | grep -Eq "changed=0 .*failed=0" || { echo "IDEMPOTENCE FAILED ($tag)"; exit 1; }
+    echo "$out" | grep -A2 "PLAY RECAP"
+    echo "$out" | grep -Eq "changed=0[[:space:]].*failed=0" || { echo "IDEMPOTENCE FAILED ('"$tag"')"; exit 1; }
   '
 
   # Functional checks

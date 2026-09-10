@@ -47,14 +47,16 @@
     owner: "{{ guac_tomcat_user }}"
     group: "{{ guac_tomcat_group }}"
     creates: "{{ guac_tomcat_versioned_dir }}/bin/catalina.sh"
+  register: _tomcat_unpack
 
-- name: Own the Tomcat tree
+- name: Own the Tomcat tree (only on fresh unpack)
   ansible.builtin.file:
     path: "{{ guac_tomcat_versioned_dir }}"
     state: directory
     owner: "{{ guac_tomcat_user }}"
     group: "{{ guac_tomcat_group }}"
     recurse: true
+  when: _tomcat_unpack is changed
 
 - name: Symlink {{ guac_tomcat_home }}
   ansible.builtin.file:
