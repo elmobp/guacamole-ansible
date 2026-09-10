@@ -40,10 +40,13 @@ podman exec "$CTR" bash -lc "cd /root/guac && ansible-playbook site.yml -e guac_
 echo "== verify =="
 podman exec "$CTR" bash -lc "
   set -e
+  cd /root/guac
   grep -q '${TO}' /etc/guacamole/.guac_schema_version || { echo 'FAIL: schema marker not ${TO}'; exit 1; }
   /usr/local/sbin/guacd -v 2>&1 | grep -q '${TO}' || { echo 'FAIL: guacd not ${TO}'; exit 1; }
   ls /etc/guacamole/extensions | grep -q \"guacamole-auth-jdbc-mysql-${TO}.jar\" || { echo 'FAIL: jdbc jar not ${TO}'; exit 1; }
   ls /etc/guacamole/extensions | grep -q \"${FROM}\" && { echo 'FAIL: stale ${FROM} jar left behind'; exit 1; } || true
+  ls /etc/guacamole/*.war | grep -q \"guacamole-${TO}.war\" || { echo 'FAIL: war not ${TO}'; exit 1; }
+  ls /etc/guacamole/ | grep -q \"guacamole-${FROM}.war\" && { echo 'FAIL: stale ${FROM} war left behind'; exit 1; } || true
   bash test/check.sh"
 echo "== idempotence at ${TO} =="
 podman exec -e ANSIBLE_NOCOLOR=1 "$CTR" bash -lc "cd /root/guac && ansible-playbook site.yml -e guac_version=${TO} | grep -A1 'PLAY RECAP' | grep -q 'changed=0.*failed=0'" \
