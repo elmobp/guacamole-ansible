@@ -39,11 +39,13 @@ ensure_systemd_image() {
     oraclelinux:*) echo "$base"; return ;;
   esac
   local DEB_MIRROR="${DEB_MIRROR:-http://kartolo.sby.datautama.net.id/debian}"
-  local UBU_MIRROR="${UBU_MIRROR:-http://ports.ubuntu.com/ubuntu-ports}"
+  # Ubuntu: ports.ubuntu.com serves non-amd64 (arm64 laptop); amd64 (CI) needs archive.ubuntu.com.
+  # Resolved inside the container from `dpkg --print-architecture` unless UBU_MIRROR is set.
+  local UBU_MIRROR="${UBU_MIRROR:-}"
   local mirror_cmd=":"
   case "$base" in
     debian:*)  mirror_cmd="C=\$(. /etc/os-release; echo \$VERSION_CODENAME); rm -f /etc/apt/sources.list.d/debian.sources; printf 'deb ${DEB_MIRROR} %s main\ndeb ${DEB_MIRROR} %s-updates main\ndeb http://security.debian.org/debian-security %s-security main\n' \$C \$C \$C > /etc/apt/sources.list" ;;
-    ubuntu:*)  mirror_cmd="C=\$(. /etc/os-release; echo \$VERSION_CODENAME); rm -f /etc/apt/sources.list.d/ubuntu.sources; printf 'deb ${UBU_MIRROR} %s main universe\ndeb ${UBU_MIRROR} %s-updates main universe\ndeb ${UBU_MIRROR} %s-security main universe\n' \$C \$C \$C > /etc/apt/sources.list" ;;
+    ubuntu:*)  mirror_cmd="C=\$(. /etc/os-release; echo \$VERSION_CODENAME); A=\$(dpkg --print-architecture); if [ -n '${UBU_MIRROR}' ]; then M='${UBU_MIRROR}'; S='${UBU_MIRROR}'; elif [ \"\$A\" = amd64 ] || [ \"\$A\" = i386 ]; then M=http://archive.ubuntu.com/ubuntu; S=http://security.ubuntu.com/ubuntu; else M=http://ports.ubuntu.com/ubuntu-ports; S=http://ports.ubuntu.com/ubuntu-ports; fi; rm -f /etc/apt/sources.list.d/ubuntu.sources; printf 'deb %s %s main universe\ndeb %s %s-updates main universe\ndeb %s %s-security main universe\n' \$M \$C \$M \$C \$S \$C > /etc/apt/sources.list" ;;
   esac
   if ! podman image exists "$img"; then
     echo ">>> building systemd base image for $tag" >&2
@@ -88,10 +90,11 @@ run_one() {
   done
 
   # Optional apt mirror override for the slow test network.
-  #   DEB_MIRROR   default http://kartolo.sby.datautama.net.id/debian   (arm64, ~13 MB/s here)
-  #   UBU_MIRROR   default http://ports.ubuntu.com/ubuntu-ports         (arm64 archive)
+  #   DEB_MIRROR   default http://kartolo.sby.datautama.net.id/debian   (serves all arches, fast here)
+  #   UBU_MIRROR   unset -> resolved by arch inside the container:
+  #                amd64/i386 -> archive.ubuntu.com (CI);  else ports.ubuntu.com (arm64 laptop)
   local DEB_MIRROR="${DEB_MIRROR:-http://kartolo.sby.datautama.net.id/debian}"
-  local UBU_MIRROR="${UBU_MIRROR:-http://ports.ubuntu.com/ubuntu-ports}"
+  local UBU_MIRROR="${UBU_MIRROR:-}"
   case "$base" in
     debian:*)
       podman exec "$ctr" bash -lc "
@@ -107,11 +110,15 @@ EOF
     ubuntu:*)
       podman exec "$ctr" bash -lc "
         C=\$(. /etc/os-release; echo \$VERSION_CODENAME)
+        A=\$(dpkg --print-architecture)
+        if [ -n '${UBU_MIRROR}' ]; then M='${UBU_MIRROR}'; S='${UBU_MIRROR}'
+        elif [ \"\$A\" = amd64 ] || [ \"\$A\" = i386 ]; then M=http://archive.ubuntu.com/ubuntu; S=http://security.ubuntu.com/ubuntu
+        else M=http://ports.ubuntu.com/ubuntu-ports; S=http://ports.ubuntu.com/ubuntu-ports; fi
         rm -f /etc/apt/sources.list.d/ubuntu.sources
         cat > /etc/apt/sources.list <<EOF
-deb ${UBU_MIRROR} \$C main universe
-deb ${UBU_MIRROR} \$C-updates main universe
-deb ${UBU_MIRROR} \$C-security main universe
+deb \$M \$C main universe
+deb \$M \$C-updates main universe
+deb \$S \$C-security main universe
 EOF
         echo 'Acquire::Retries \"5\"; Acquire::http::Timeout \"30\";' > /etc/apt/apt.conf.d/80-guac-retries
       " ;;
