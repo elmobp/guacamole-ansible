@@ -23,7 +23,7 @@ INCLUDE_TLS="{{ 'yes' if guac_backup_include_tls | bool else 'no' }}"
 mkdir -p "${BACKUP_DIR}"
 
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
-HOST="$(hostname -s)"
+HOST="$(uname -n | cut -d. -f1)"
 STAGE="$(mktemp -d)"
 trap 'rm -rf "${STAGE}"' EXIT
 NAME="guac-backup-${HOST}-${TS}"

@@ -58,6 +58,14 @@
         mode: "0644"
         content: "*  hard  core  0\n"
 
+    - name: Ensure systemd-coredump drop-in dir
+      ansible.builtin.file:
+        path: /etc/systemd/coredump.conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
     - name: Disable systemd-coredump storage
       ansible.builtin.copy:
         dest: /etc/systemd/coredump.conf.d/90-guac.conf
