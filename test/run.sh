@@ -184,9 +184,11 @@ EOF
   if [[ -n "$PREBUILT" ]]; then
     mkdir -p "$PREBUILT"
     podman exec "$ctr" bash -lc '
+      shopt -s nullglob
       tar -cf /tmp/out.tar \
         /usr/local/sbin/guacd /usr/local/.guacd_build_id \
-        /usr/local/lib/libguac* /usr/local/lib/freerdp2/*guac* 2>/dev/null || \
+        /usr/local/lib/libguac* \
+        /usr/local/lib/freerdp2/*guac* /usr/local/lib/freerdp3/*guac* 2>/dev/null || \
       tar -cf /tmp/out.tar /usr/local/sbin/guacd /usr/local/.guacd_build_id /usr/local/lib/libguac*'
     podman cp "$ctr:/tmp/out.tar" "$PREBUILT/${tag}.tar"
   fi
