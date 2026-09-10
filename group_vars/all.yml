@@ -208,3 +208,9 @@ guac_connections_prune: false                    # true => delete connections/us
 # ---------------------------------------------------------------------------
 guac_default_admin_user: "guacadmin"
 guac_default_admin_password: "guacadmin"
+guac_syslog_tls: false                            # TLS-wrap forwarded logs (set CA/cert/key below)
+guac_syslog_relp: false                           # reliable RELP transport
+guac_syslog_tls_permitted_peer: ""                # collector cert CN/SAN
+guac_syslog_tls_ca: ""                            # PEM: collector CA  (vault)
+guac_syslog_tls_cert: ""                          # PEM: client cert   (vault, optional mutual TLS)
+guac_syslog_tls_key: ""                           # PEM: client key    (vault)

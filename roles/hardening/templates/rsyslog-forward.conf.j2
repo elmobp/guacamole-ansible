@@ -1,0 +1,30 @@
+# Managed by Ansible (ansible-guacamole) — forward all logs to the SIEM
+{% set host = guac_syslog_target.split(':')[0] %}
+{% set port = guac_syslog_target.split(':')[1] if ':' in guac_syslog_target else ('6514' if guac_syslog_tls | bool else '514') %}
+{% if guac_syslog_tls | bool %}
+global(
+  DefaultNetstreamDriver="gtls"
+  DefaultNetstreamDriverCAFile="/etc/rsyslog.d/certs/ca.pem"
+{% if guac_syslog_tls_cert | length > 0 %}
+  DefaultNetstreamDriverCertFile="/etc/rsyslog.d/certs/client-cert.pem"
+  DefaultNetstreamDriverKeyFile="/etc/rsyslog.d/certs/client-key.pem"
+{% endif %}
+)
+{% endif %}
+{% if guac_syslog_relp | bool %}
+module(load="omrelp")
+action(type="omrelp" target="{{ host }}" port="{{ port }}"
+{% if guac_syslog_tls | bool %}       tls="on" tls.caCert="/etc/rsyslog.d/certs/ca.pem"
+       tls.myCert="/etc/rsyslog.d/certs/client-cert.pem" tls.myPrivKey="/etc/rsyslog.d/certs/client-key.pem"
+       tls.authmode="{{ guac_syslog_tls_authmode }}"
+{% if guac_syslog_tls_permitted_peer | length > 0 %}       tls.permittedPeer=["{{ guac_syslog_tls_permitted_peer }}"]
+{% endif %}
+{% endif %}       queue.type="linkedList" queue.size="50000" action.resumeRetryCount="-1")
+{% else %}
+action(type="omfwd" target="{{ host }}" port="{{ port }}"
+       protocol="{{ 'tcp' if guac_syslog_tls | bool or guac_syslog_protocol == 'tcp' else 'udp' }}"
+{% if guac_syslog_tls | bool %}       StreamDriver="gtls" StreamDriverMode="1" StreamDriverAuthMode="{{ guac_syslog_tls_authmode }}"
+{% if guac_syslog_tls_permitted_peer | length > 0 %}       StreamDriverPermittedPeers="{{ guac_syslog_tls_permitted_peer }}"
+{% endif %}
+{% endif %}       queue.type="linkedList" queue.size="50000" queue.saveOnShutdown="on" action.resumeRetryCount="-1")
+{% endif %}

@@ -26,3 +26,12 @@ guac_auto_patch: false
 # FIPS: opt-in only. Enabling requires a reboot and can lock you out if the
 # platform is not prepared. Ubuntu needs Ubuntu Pro (`pro enable fips-updates`).
 guac_fips_enabled: false
+
+# External log forwarding transport (used when guac_syslog_target is set)
+guac_syslog_tls: false                 # TLS-wrap the syslog stream (recommended)
+guac_syslog_relp: false                # use RELP (reliable) instead of plain omfwd
+guac_syslog_tls_authmode: "x509/name"  # x509/name | x509/certvalid | anon
+guac_syslog_tls_permitted_peer: ""     # expected collector CN/SAN (for x509/name)
+guac_syslog_tls_ca: ""                 # PEM content — collector CA
+guac_syslog_tls_cert: ""               # PEM content — client cert (mutual TLS, optional)
+guac_syslog_tls_key: ""                # PEM content — client key

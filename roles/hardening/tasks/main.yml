@@ -16,6 +16,7 @@
         - /etc/systemd/coredump.conf.d
         - /etc/ssh/sshd_config.d
         - /etc/rsyslog.d
+        - /etc/rsyslog.d/certs
 
     # --- Kernel / sysctl -------------------------------------------------
     - name: Apply sysctl hardening
@@ -188,22 +189,43 @@
         - not (guac_container_build | bool)
       failed_when: false
 
-    # --- Central log forwarding -----------------------------------
-    - name: Install rsyslog for log forwarding
+    # --- Central log forwarding (plain, TLS, or RELP+TLS) ---------
+    - name: Install rsyslog (+ TLS / RELP drivers)
       ansible.builtin.package:
-        name: rsyslog
+        name: "{{ ['rsyslog']
+                  + (['rsyslog-gnutls'] if guac_syslog_tls | bool else [])
+                  + (['rsyslog-relp'] if guac_syslog_relp | bool else []) }}"
         state: present
       when: guac_syslog_target | length > 0
+      failed_when: false
+
+    - name: Deploy syslog TLS material
+      ansible.builtin.copy:
+        dest: "/etc/rsyslog.d/certs/{{ item.name }}"
+        content: "{{ item.content }}"
+        owner: root
+        group: root
+        mode: "0640"
+      loop:
+        - { name: "ca.pem", content: "{{ guac_syslog_tls_ca }}" }
+        - { name: "client-cert.pem", content: "{{ guac_syslog_tls_cert }}" }
+        - { name: "client-key.pem", content: "{{ guac_syslog_tls_key }}" }
+      loop_control:
+        label: "{{ item.name }}"
+      when:
+        - guac_syslog_target | length > 0
+        - guac_syslog_tls | bool
+        - item.content | length > 0
+      no_log: true
+      notify: Restart rsyslog
 
     - name: Configure remote syslog forwarding
-      ansible.builtin.copy:
+      ansible.builtin.template:
+        src: rsyslog-forward.conf.j2
         dest: /etc/rsyslog.d/90-guac-forward.conf
         owner: root
         group: root
         mode: "0644"
-        content: |
-          # Managed by Ansible (ansible-guacamole) — forward all logs to the SIEM
-          *.* {{ '@@' if guac_syslog_protocol == 'tcp' else '@' }}{{ guac_syslog_target }}
       when: guac_syslog_target | length > 0
       notify: Restart rsyslog
 
