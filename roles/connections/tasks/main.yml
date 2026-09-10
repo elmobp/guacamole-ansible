@@ -10,7 +10,7 @@
   delay: 5
   when:
     - not (guac_container_build | bool)
-    - (guac_connections | length) + (guac_connection_groups | length) + (guac_users | length) > 0
+    - (guac_connections | length) + (guac_connection_groups | length) + (guac_users | length) + (guac_user_groups | length) > 0
 
 - name: Reconcile Guacamole connections / groups / users
   guacamole_reconcile:
@@ -21,11 +21,12 @@
     connection_groups: "{{ guac_connection_groups }}"
     connections: "{{ guac_connections }}"
     users: "{{ guac_users }}"
+    user_groups: "{{ guac_user_groups }}"
     prune: "{{ guac_connections_prune | bool }}"
   register: _guac_recon
   when:
     - not (guac_container_build | bool)
-    - (guac_connections | length) + (guac_connection_groups | length) + (guac_users | length) > 0
+    - (guac_connections | length) + (guac_connection_groups | length) + (guac_users | length) + (guac_user_groups | length) > 0
 
 - name: Show reconciliation actions
   ansible.builtin.debug:

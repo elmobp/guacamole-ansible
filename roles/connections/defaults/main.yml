@@ -39,6 +39,14 @@ guac_connections: []
 guac_connection_groups: []
 guac_users: []
 
+# RBAC: user groups whose NAMES match your LDAP group names (ldap-group-name-attribute).
+# Members of the LDAP group inherit these permissions on next login.
+#   - name: "guac-web-admins"
+#     connections: ["dc01 (RDP)"]
+#     groups: ["Windows"]
+#     system_permissions: ["CREATE_CONNECTION"]
+guac_user_groups: []
+
 guac_connections_datasource: "mysql"
 guac_connections_api_base: "http://127.0.0.1:8080/guacamole/api"
 # Prune connections/groups/users NOT listed above (dangerous — off by default)

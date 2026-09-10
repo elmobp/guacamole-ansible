@@ -219,3 +219,8 @@ guac_syslog_tls_key: ""                           # PEM: client key    (vault)
 # Empty => use the pinned release. Test this path on OL only.
 guac_source_repo: "https://github.com/apache/guacamole-server"
 guac_source_ref: ""                               # branch | tag | commit (e.g. "1.6.0", "main")
+
+# RBAC — grant connections/groups to user groups that mirror LDAP group names.
+guac_user_groups: []
+# LDAP group RBAC also needs these keys in guac_ldap: group_base_dn, member_attribute,
+# member_attribute_type (dn|uid), group_name_attribute (default cn).

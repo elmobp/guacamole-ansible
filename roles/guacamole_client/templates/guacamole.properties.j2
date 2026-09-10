@@ -41,6 +41,12 @@ ldap-config-base-dn: {{ guac_ldap.config_base_dn }}
 ldap-user-base-dn: {{ guac_ldap.user_base_dn }}
 ldap-user-search-filter: {{ guac_ldap.user_search_filter }}
 ldap-max-search-results: {{ guac_ldap.max_search_results }}
+{% if guac_ldap.group_base_dn | default('') | length > 0 %}
+ldap-group-base-dn: {{ guac_ldap.group_base_dn }}
+ldap-member-attribute: {{ guac_ldap.member_attribute | default('member') }}
+ldap-member-attribute-type: {{ guac_ldap.member_attribute_type | default('dn') }}
+ldap-group-name-attribute: {{ guac_ldap.group_name_attribute | default('cn') }}
+{% endif %}
 {% endif %}
 {% if guac_histrec_enabled | bool %}
 

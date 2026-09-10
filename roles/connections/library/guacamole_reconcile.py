@@ -116,6 +116,23 @@ class Guac:
     def delete_user(self, username):
         self.req("DELETE", "/session/data/%s/users/%s" % (self.ds, username))
 
+    # --- user groups (RBAC — mirrors LDAP groups) ------------------
+    def user_groups(self):
+        return self.req("GET", "/session/data/%s/userGroups" % self.ds)
+
+    def create_user_group(self, name, attrs):
+        return self.req("POST", "/session/data/%s/userGroups" % self.ds,
+                        body={"identifier": name, "attributes": attrs or {}})
+
+    def user_group_permissions(self, name):
+        return self.req("GET", "/session/data/%s/userGroups/%s/permissions" % (self.ds, name))
+
+    def patch_user_group_permissions(self, name, patch):
+        self.req("PATCH", "/session/data/%s/userGroups/%s/permissions" % (self.ds, name), body=patch)
+
+    def delete_user_group(self, name):
+        self.req("DELETE", "/session/data/%s/userGroups/%s" % (self.ds, name))
+
 
 def flatten_groups(node, parent_name="ROOT", out=None):
     out = out if out is not None else {}
@@ -271,6 +288,49 @@ def run(module):
                 changed = True
                 actions.append("prune user %s" % un)
 
+    # ---- user groups (RBAC; names should match the LDAP group names) ----
+    existing_ug = g.user_groups()
+    conns_ug = flatten_connections(g.group_tree())
+    for ug in p["user_groups"]:
+        name = ug["name"]
+        if name not in existing_ug:
+            if not module.check_mode:
+                g.create_user_group(name, {k: str(v) for k, v in (ug.get("attributes") or {}).items()})
+            changed = True
+            actions.append("create user group %s" % name)
+        want_sys = set(ug.get("system_permissions") or [])
+        want_conn = set(ug.get("connections") or [])
+        want_grp = set(ug.get("groups") or [])
+        if want_sys or want_conn or want_grp:
+            cur = g.user_group_permissions(name) if name in existing_ug and not module.check_mode else {
+                "systemPermissions": [], "connectionPermissions": {}, "connectionGroupPermissions": {}}
+            patch = []
+            for sp in want_sys:
+                if sp not in cur.get("systemPermissions", []):
+                    patch.append({"op": "add", "path": "/systemPermissions", "value": sp})
+            for cn in want_conn:
+                cid = conns_ug.get(cn, {}).get("id")
+                if cid and "READ" not in cur.get("connectionPermissions", {}).get(cid, []):
+                    patch.append({"op": "add", "path": "/connectionPermissions/%s" % cid, "value": "READ"})
+            for gn in want_grp:
+                gid = name_to_gid.get(gn)
+                if gid and "READ" not in cur.get("connectionGroupPermissions", {}).get(gid, []):
+                    patch.append({"op": "add", "path": "/connectionGroupPermissions/%s" % gid, "value": "READ"})
+            if patch:
+                if not module.check_mode:
+                    g.patch_user_group_permissions(name, patch)
+                changed = True
+                actions.append("grant user-group permissions %s (%d)" % (name, len(patch)))
+
+    if p["prune"]:
+        managed_ug = {ug["name"] for ug in p["user_groups"]}
+        for name in list(existing_ug):
+            if name not in managed_ug:
+                if not module.check_mode:
+                    g.delete_user_group(name)
+                changed = True
+                actions.append("prune user group %s" % name)
+
     module.exit_json(changed=changed, actions=actions)
 
 
@@ -284,6 +344,7 @@ def main():
             connection_groups=dict(type="list", elements="dict", default=[]),
             connections=dict(type="list", elements="dict", default=[]),
             users=dict(type="list", elements="dict", default=[]),
+            user_groups=dict(type="list", elements="dict", default=[]),
             prune=dict(type="bool", default=False),
         ),
         supports_check_mode=True,
