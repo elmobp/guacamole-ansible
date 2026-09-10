@@ -11,3 +11,4 @@ common_base_packages:
   - ca-certificates
   - openssl
   - python3
+  - cronie

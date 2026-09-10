@@ -40,6 +40,28 @@
     - guac_secure_mariadb | bool
   changed_when: false
 
+- name: Check whether MariaDB timezone tables are loaded
+  community.mysql.mysql_query:
+    login_user: root
+    login_unix_socket: "{{ guac_mariadb_socket }}"
+    query: "SELECT COUNT(*) AS n FROM mysql.time_zone_name"
+  register: _tz_rows
+  changed_when: false
+  when:
+    - guac_install_mariadb | bool
+    - guac_db_timezone | length > 0
+
+- name: Load MariaDB timezone tables
+  ansible.builtin.shell:
+    cmd: "set -o pipefail; mariadb-tzinfo-to-sql /usr/share/zoneinfo 2>/dev/null | mariadb --socket={{ guac_mariadb_socket }} mysql"
+    executable: /bin/bash
+  when:
+    - guac_install_mariadb | bool
+    - guac_db_timezone | length > 0
+    - (_tz_rows.query_result[0][0].n | int) == 0
+  changed_when: true
+  notify: Restart mariadb
+
 - name: Set MariaDB default time zone
   ansible.builtin.copy:
     dest: /etc/my.cnf.d/guacamole-tz.cnf
@@ -49,7 +71,9 @@
     owner: root
     group: root
     mode: "0644"
-  when: guac_install_mariadb | bool
+  when:
+    - guac_install_mariadb | bool
+    - guac_db_timezone | length > 0
   notify: Restart mariadb
 
 - name: Flush handlers now (timezone must apply before schema load)
@@ -136,24 +160,10 @@
     - (_schema_check.query_result[0][0].n | int) == 0
 
 # --- MySQL Connector/J ------------------------------------------------
-- name: Download MySQL Connector/J
+- name: Install MySQL Connector/J jar into GUACAMOLE_HOME/lib
   ansible.builtin.get_url:
     url: "{{ guac_mysql_connector_j_url }}"
-    dest: "{{ guac_build_dir }}/mysql-connector-j-{{ guac_mysql_connector_j_version }}.tar.gz"
-    mode: "0644"
-
-- name: Unpack MySQL Connector/J
-  ansible.builtin.unarchive:
-    src: "{{ guac_build_dir }}/mysql-connector-j-{{ guac_mysql_connector_j_version }}.tar.gz"
-    dest: "{{ guac_build_dir }}"
-    remote_src: true
-    creates: "{{ guac_build_dir }}/mysql-connector-j-{{ guac_mysql_connector_j_version }}/mysql-connector-j-{{ guac_mysql_connector_j_version }}.jar"
-
-- name: Install Connector/J jar into GUACAMOLE_HOME/lib
-  ansible.builtin.copy:
-    src: "{{ guac_build_dir }}/mysql-connector-j-{{ guac_mysql_connector_j_version }}/mysql-connector-j-{{ guac_mysql_connector_j_version }}.jar"
     dest: "{{ guac_lib_dir }}/mysql-connector-java.jar"
-    remote_src: true
     owner: root
     group: root
     mode: "0644"

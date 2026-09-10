@@ -15,6 +15,12 @@
     group: root
     mode: "0750"
 
+- name: Ensure crond is enabled and running
+  ansible.builtin.service:
+    name: crond
+    state: started
+    enabled: true
+
 - name: Schedule Guacamole database backup
   ansible.builtin.cron:
     name: "backup guacamole"

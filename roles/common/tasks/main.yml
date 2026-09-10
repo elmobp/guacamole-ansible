@@ -26,16 +26,19 @@
     - (_epel_ol is not defined) or (_epel_ol.rc | default(1) != 0)
 
 # --- CRB / CodeReady Builder / PowerTools -----------------------------------
-- name: Discover repo ids
-  ansible.builtin.command: dnf repolist --all
+- name: Enumerate available repository ids
+  ansible.builtin.command: dnf -q repolist --all
   changed_when: false
   register: _repolist
   when: guac_enable_crb | bool
 
-- name: Enable CRB-equivalent repository
-  ansible.builtin.command: "dnf config-manager --set-enabled {{ item }}"
-  changed_when: true
-  failed_when: false
+- name: Enable CRB-equivalent repository (dnf4 or dnf5 syntax)
+  ansible.builtin.shell:
+    cmd: >-
+      dnf config-manager --set-enabled {{ item }} 2>/dev/null
+      || dnf config-manager setopt {{ item }}.enabled=1 2>/dev/null
+      || true
+  changed_when: false
   loop:
     - "ol{{ ansible_distribution_major_version }}_codeready_builder"
     - "crb"
@@ -43,6 +46,7 @@
     - "codeready-builder-for-rhel-{{ ansible_distribution_major_version }}-{{ ansible_architecture }}-rpms"
   when:
     - guac_enable_crb | bool
+    - _repolist.stdout is defined
     - item in _repolist.stdout
 
 - name: Enable RPM Fusion free (optional, for ffmpeg-devel)

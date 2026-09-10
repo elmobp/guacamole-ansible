@@ -39,15 +39,14 @@ run_one() {
     sleep 2
   done
 
-  # Bootstrap Ansible (control tooling only — not part of the product)
+  # Bootstrap Ansible (control tooling only — not part of the product).
+  # The distro "ansible" package bundles ansible.posix / community.mysql / community.general.
   podman exec "$ctr" bash -lc '
     set -e
-    dnf -y install python3 python3-pip >/dev/null
-    python3 -m pip install --quiet --upgrade pip
-    python3 -m pip install --quiet "ansible-core>=2.16"
+    dnf -y install "oracle-epel-release-el$(rpm -E %rhel)" >/dev/null 2>&1 || \
+      dnf -y install "https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm" >/dev/null
+    dnf -y install ansible >/dev/null
     mkdir -p /root/guac && cp -a /opt/guac-ansible/. /root/guac/
-    cd /root/guac
-    ansible-galaxy collection install -r requirements.yml >/dev/null
   '
 
   # First run

@@ -11,7 +11,7 @@
 guac_version: "1.6.0"
 guac_mysql_connector_j_version: "9.3.0"
 # Apache Tomcat (installed from the official binary tarball — RHEL has no stable pkg)
-guac_tomcat_version: "9.0.109"
+guac_tomcat_version: "9.0.121"
 guac_tomcat_major: "9"
 
 # Download mirrors
@@ -19,7 +19,7 @@ guac_apache_dl_base: "https://dlcdn.apache.org/guacamole/{{ guac_version }}"
 guac_apache_archive_base: "https://archive.apache.org/dist/guacamole/{{ guac_version }}"
 guac_tomcat_dl_base: "https://dlcdn.apache.org/tomcat/tomcat-{{ guac_tomcat_major }}/v{{ guac_tomcat_version }}/bin"
 guac_tomcat_archive_base: "https://archive.apache.org/dist/tomcat/tomcat-{{ guac_tomcat_major }}/v{{ guac_tomcat_version }}/bin"
-guac_mysql_connector_j_url: "https://dev.mysql.com/get/Downloads/Connector-J/mysql-connector-j-{{ guac_mysql_connector_j_version }}.tar.gz"
+guac_mysql_connector_j_url: "https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/{{ guac_mysql_connector_j_version }}/mysql-connector-j-{{ guac_mysql_connector_j_version }}.jar"
 
 # ---------------------------------------------------------------------------
 # Paths
