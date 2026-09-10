@@ -28,6 +28,8 @@
 - [ ] **DB-03**: JDBC schema imported once from the downloaded `guacamole-auth-jdbc` archive
 - [ ] **DB-04**: MySQL Connector/J jar placed in `/etc/guacamole/lib/`
 - [ ] **DB-05**: Optional daily `mysqldump` backup job installed as a cron/systemd-timer via variable toggle
+- [ ] **DB-06**: Remote/separate DB server supported — `guac_install_mariadb: false` + `guac_mysql_host` + root creds; role creates DB/user and imports schema over TCP
+- [ ] **DB-07**: `guac_db_bootstrap` toggle to skip DB/user/schema creation entirely (DBA-managed database)
 
 ### Guacamole Server (guacd)
 
@@ -61,6 +63,9 @@
 - [ ] **EXT-04**: `guac_quickconnect_enabled` installs the quickconnect extension jar
 - [ ] **EXT-05**: `guac_histrec_enabled` installs history-recording-storage jar + creates the recording path
 - [ ] **EXT-06**: `guac_branding_enabled` deploys the dark-theme `branding.jar`
+- [ ] **EXT-07**: Every extension is independently true/false in host_vars; nothing installed unless explicitly enabled (branding included — default off)
+- [ ] **EXT-08**: Enabling an extension later and re-running installs just it; disabling + re-running removes just it (no full rebuild)
+- [ ] **EXT-09**: All per-extension settings (LDAP dirs, DUO keys, TOTP issuer, histrec path) are host_vars-driven and templated into `guacamole.properties`
 
 ### Verification
 
@@ -68,6 +73,30 @@
 - [ ] **TEST-02**: Same flow for Oracle Linux 10
 - [ ] **TEST-03**: Automated post-checks: guacd/tomcat/nginx/mariadb active; `https://host/` returns the login page; token API auth succeeds for `guacadmin`
 - [ ] **TEST-04**: Second `site.yml` run in each container is green (idempotence proof)
+
+### Upgrades
+
+- [ ] **UPG-01**: Bumping `guac_version` and re-running `site.yml` performs a full upgrade with no other edits
+- [ ] **UPG-02**: guacd is rebuilt from the new source only when the running version differs
+- [ ] **UPG-03**: Stale versioned artifacts (old war, old extension jars) are removed on upgrade
+- [ ] **UPG-04**: JDBC schema `upgrade/*.sql` scripts applied idempotently on version bump
+- [ ] **UPG-05**: Enabled extension jars re-fetched at the new version; `guacamole.properties` unchanged
+
+### Debian / Ubuntu family
+
+- [ ] **DEB-01**: `site.yml` also runs on Debian 12/13 and Ubuntu 22.04/24.04 (`ansible_os_family == "Debian"`)
+- [ ] **DEB-02**: Package/repo/service logic branches by OS family (apt, ufw, no SELinux/EPEL) via role vars
+- [ ] **DEB-03**: guacd build deps, Tomcat, MariaDB, Nginx all resolve on Debian family
+- [ ] **DEB-04**: RHEL 9/10 continues to pass unchanged after the refactor
+- [ ] **DEB-05**: `test/run.sh` matrix covers ol9, ol10, debian12, debian13, ubuntu2204, ubuntu2404
+
+### Container Image
+
+- [ ] **IMG-01**: `Containerfile`/`Dockerfile` builds a Guacamole image by running the roles at build time
+- [ ] **IMG-02**: `docker-compose.yml` / `podman-compose` brings up Guacamole + MariaDB
+- [ ] **IMG-03**: Image exposes 8080 (and 443 when proxy baked in) and starts guacd + tomcat (+ nginx)
+- [ ] **IMG-04**: Compose stack reaches a working `guacadmin` login
+- [ ] **IMG-05**: Image build documented in README
 
 ## v2 Requirements
 

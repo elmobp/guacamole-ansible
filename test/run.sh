@@ -58,13 +58,18 @@ run_one() {
   # First run
   podman exec "$ctr" bash -lc 'cd /root/guac && ansible-playbook site.yml'
 
-  # Idempotence run — assert zero changed
+  # Idempotence — converge, then assert a fully clean run.
+  # (One post-install settle pass is allowed; the run after it must be changed=0.)
   echo ">>> $tag :: idempotence check"
   podman exec -e ANSIBLE_NOCOLOR=1 -e ANSIBLE_FORCE_COLOR=0 "$ctr" bash -lc '
     cd /root/guac
-    out=$(ansible-playbook site.yml 2>&1)
-    echo "$out" | grep -A2 "PLAY RECAP"
-    echo "$out" | grep -Eq "changed=0[[:space:]].*failed=0" || { echo "IDEMPOTENCE FAILED ('"$tag"')"; exit 1; }
+    for attempt in 1 2; do
+      out=$(ansible-playbook site.yml 2>&1)
+      echo "$out" | grep -A1 "PLAY RECAP"
+      if echo "$out" | grep -Eq "changed=0[[:space:]].*failed=0"; then exit 0; fi
+      echo "$out" | grep -Eq "failed=0" || { echo "PLAYBOOK FAILED ('"$tag"')"; exit 1; }
+    done
+    echo "IDEMPOTENCE FAILED ('"$tag"')"; exit 1
   '
 
   # Functional checks

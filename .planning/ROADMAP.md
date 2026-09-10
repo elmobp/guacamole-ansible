@@ -69,6 +69,36 @@ extensions, and the two-distro test harness.
 3. Full-playbook second run is green on both distros
 4. README documents the flow and the production Let's Encrypt switch
 
+### Phase 7: One-line upgrades
+**Goal:** Bump `guac_version`, re-run `site.yml`, get a clean in-place upgrade — nothing else to touch.
+**Mode:** mvp
+**Requirements:** UPG-01, UPG-02, UPG-03, UPG-04, UPG-05
+**Success Criteria:**
+1. Install 1.5.5, then set `guac_version: 1.6.0` and re-run → guacd rebuilt, new war/jars, schema upgraded, login still works
+2. Stale `guacamole-*-1.5.5.jar` / old war removed
+3. Re-run at same version → changed=0
+4. Works on OL9 and OL10
+
+### Phase 9: Debian / Ubuntu family support
+**Goal:** Same playbook runs on Debian 12/13 + Ubuntu 22.04/24.04; RHEL 9/10 unaffected.
+**Mode:** mvp
+**Requirements:** DEB-01, DEB-02, DEB-03, DEB-04, DEB-05
+**Success Criteria:**
+1. Roles branch by `ansible_os_family` (RedHat vs Debian) via `vars/{{ ansible_os_family }}.yml`
+2. `test/run.sh` runs ol9, ol10, debian12, debian13, ubuntu2204, ubuntu2404 — all green (build + idempotence + check.sh)
+3. RHEL runs identical to before the refactor
+4. README documents the supported matrix
+
+### Phase 8: Container image + compose
+**Goal:** Build a Guacamole container image from the roles; compose stack with MariaDB.
+**Mode:** mvp
+**Requirements:** IMG-01, IMG-02, IMG-03, IMG-04, IMG-05
+**Success Criteria:**
+1. `podman build` produces an image running guacd + tomcat (+ nginx)
+2. `podman-compose up` (or docker compose) brings up Guacamole + MariaDB
+3. `guacadmin` can log in against the compose stack
+4. README documents the build + run
+
 ---
 
 ## Coverage

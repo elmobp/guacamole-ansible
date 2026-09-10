@@ -59,6 +59,7 @@
 - name: Refresh dnf metadata
   ansible.builtin.dnf:
     update_cache: true
+  changed_when: false
 
 - name: Install base packages
   ansible.builtin.dnf:
