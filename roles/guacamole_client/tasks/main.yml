@@ -86,12 +86,16 @@
     - Restart tomcat
 
 # --- Guacamole web app --------------------------------------------------
-- name: Download guacamole.war
+# The war is stored under a VERSION-QUALIFIED name. An unversioned dest made
+# get_url skip the download on a version bump (local mtime newer than the remote
+# Last-Modified), leaving a stale war paired with a new JDBC extension ->
+# "Extension is not compatible with this version of Guacamole" -> all logins fail.
+- name: Download guacamole.war ({{ guac_version }})
   block:
     - name: Fetch war (primary mirror)
       ansible.builtin.get_url:
         url: "{{ guac_client_war_url }}"
-        dest: "{{ guac_home }}/guacamole.war"
+        dest: "{{ guac_home }}/guacamole-{{ guac_version }}.war"
         owner: root
         group: "{{ guac_tomcat_group }}"
         mode: "0664"
@@ -100,11 +104,22 @@
     - name: Fetch war (archive.apache.org fallback)
       ansible.builtin.get_url:
         url: "{{ guac_client_war_fallback_url }}"
-        dest: "{{ guac_home }}/guacamole.war"
+        dest: "{{ guac_home }}/guacamole-{{ guac_version }}.war"
         owner: root
         group: "{{ guac_tomcat_group }}"
         mode: "0664"
       register: _war_fetch
+
+- name: Link guacamole.war into Tomcat webapps
+  ansible.builtin.file:
+    src: "{{ guac_home }}/guacamole-{{ guac_version }}.war"
+    dest: "{{ guac_tomcat_home }}/webapps/guacamole.war"
+    state: link
+    owner: "{{ guac_tomcat_user }}"
+    group: "{{ guac_tomcat_group }}"
+    force: true
+  register: _war_link
+  notify: Restart tomcat
 
 - name: Clear stale exploded webapp + work cache (on war change / upgrade)
   ansible.builtin.file:
@@ -113,18 +128,28 @@
   loop:
     - "{{ guac_tomcat_home }}/webapps/guacamole"
     - "{{ guac_tomcat_home }}/work/Catalina/localhost/guacamole"
-  when: _war_fetch is changed
+  when: (_war_fetch is changed) or (_war_link is changed)
   notify: Restart tomcat
 
-- name: Link guacamole.war into Tomcat webapps
+- name: Find downloaded guacamole war files
+  ansible.builtin.find:
+    paths: "{{ guac_home }}"
+    patterns: "guacamole-*.war"
+  register: _war_files
+
+- name: Remove stale-version guacamole war files
   ansible.builtin.file:
-    src: "{{ guac_home }}/guacamole.war"
-    dest: "{{ guac_tomcat_home }}/webapps/guacamole.war"
-    state: link
-    owner: "{{ guac_tomcat_user }}"
-    group: "{{ guac_tomcat_group }}"
-    force: true
-  notify: Restart tomcat
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ _war_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: item.path | basename != 'guacamole-' ~ guac_version ~ '.war'
+
+- name: Remove legacy unversioned guacamole.war (pre-versioned-war layout)
+  ansible.builtin.file:
+    path: "{{ guac_home }}/guacamole.war"
+    state: absent
 
 - name: Find installed JDBC MySQL auth extensions
   ansible.builtin.find:
