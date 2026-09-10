@@ -2,6 +2,21 @@
 - name: Hardening (CIS-aligned)
   when: guac_hardening_enabled | bool
   block:
+    - name: Ensure config drop-in directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+      loop:
+        - /etc/modprobe.d
+        - /etc/sysctl.d
+        - /etc/security/limits.d
+        - /etc/systemd/coredump.conf.d
+        - /etc/ssh/sshd_config.d
+        - /etc/rsyslog.d
+
     # --- Kernel / sysctl -------------------------------------------------
     - name: Apply sysctl hardening
       ansible.posix.sysctl:
