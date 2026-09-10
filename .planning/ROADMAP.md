@@ -101,6 +101,98 @@ extensions, and the two-distro test harness.
 
 ---
 
+## Milestone 2 — requested 2026-09-10 (sized honestly, sequenced)
+
+Pick phases to run; they are mostly independent. Sizes: **S** ≈ hours, **M** ≈ a day, **L** ≈ multi-day, **XL** ≈ a project.
+
+### Phase 10: CI build cache + per-distro images  **[M]**
+- Cache the compiled `guacd` tree (+ war/jar downloads) in GitHub Actions keyed on
+  `guac_version` + arch + distro; playbook installs from cache, **skips the compile step** when the
+  cached binary matches. Local `guac_build_dir` becomes a restorable cache dir.
+- `container/` builds an image **per supported OS** (build-arg `BASE_IMAGE`), matrix in CI, pushed
+  to `ghcr.io` (or artifact) on tag.
+- **Success:** second CI run for an unchanged `guac_version` does not recompile; 7 images build.
+
+### Phase 11: Build Guacamole from a source branch  **[M]**
+- `guac_source_ref` (tag | branch | commit) + `guac_source_repo` — when set, `git clone` +
+  `mvn package` the client and `autoreconf && ./configure && make` the server from that ref
+  instead of the release tarball. Version string derived from the ref.
+- CI: this path tested **on OL only** (per request); release-tarball path stays the matrix default.
+- **Success:** `-e guac_source_ref=1.6.0` builds + logs in on OL9.
+
+### Phase 12: Backend RDP session load balancing  **[S–M]**
+- `connections` module already accepts `type: BALANCING` groups; add: member weighting,
+  `enable-session-affinity`, health note, and docs/example. Optional: guacd behind
+  multiple backends via balancing group of identical connections.
+- **Success:** a balancing group with 3 RDP members round-robins; affinity honoured.
+
+### Phase 13: RBAC via LDAP groups  **[M]**
+- LDAP extension: `ldap-group-base-dn`, `ldap-member-attribute`, group→connection mapping in the
+  Guacamole schema; `guac_ldap_rbac` list: `{ group_dn, connections: [...], groups: [...], system: [...] }`
+  reconciled by the `connections` module (grant to `USER_GROUP` entities).
+- **Success:** members of `CN=guac-web,OU=...` see only the `web` connections; non-members don't.
+
+### Phase 14: External log forwarding over TLS  **[M]**
+- Extend `hardening`: rsyslog **RELP + TLS** (or omfwd + TLS), CA + client cert config
+  (`guac_syslog_tls_ca`, `_cert`, `_key`, `guac_syslog_relp`), `audisp` → rsyslog → collector.
+  Plain TCP/UDP stays available; TLS is the recommended path.
+- **Success:** events arrive at a TLS syslog collector; `openssl s_client` shows TLS 1.3.
+
+### Phase 15: CIS L2 — full coverage  **[L]**
+- Adopt the upstream **ansible-lockdown** `RHEL9-CIS` / `UBUNTU24-CIS` roles (vendored or as a
+  dependency) run in "L2 server" profile, layered under our app-specific exceptions
+  (Tomcat/nginx/guacd must keep working). Partition/mount, AIDE, PAM `pwquality`/`faillock`,
+  GRUB password, banner, aide, rsyslog, chrony, auditd immutable, etc.
+- Gate: OpenSCAP scan in CI with the SSG CIS profile; publish the score; document accepted
+  deviations. `guac_hardening_level: l2` becomes "real CIS L2 with documented exceptions".
+- **Success:** OpenSCAP CIS L2 score ≥ [target]; every non-pass has a written justification.
+
+### Phase 16: Deep ISM alignment + LLD refresh  **[L]**
+- Work the **current published ISM** systematically for every control family in scope
+  (config/patching, IDAM, crypto/TLS, logging/audit, backup, network, web, DB, media, ops);
+  for each: implement, mark partial with the gap, or mark customer-responsibility with why.
+- Rewrite `docs/LLD-RHEL-IRAP.md` §12 as a control-by-control matrix over the real ISM (not the
+  quiz dataset), each row linked to the implementing role/task, with an assessor-ready evidence
+  column and a POA&M.
+- **Success:** LLD covers every in-scope ISM control with an honest status + evidence pointer.
+
+### Phase 17: Operator manual (PDF)  **[L]**
+- `docs/manual/` (Markdown) → PDF via pandoc in CI. Every moving piece: architecture,
+  each role & variable, install, day-2 ops, upgrades, backup/restore/DR drills, connection &
+  RBAC administration, MFA enrolment, TLS/cert rotation, hardening & FIPS, log/SIEM,
+  troubleshooting runbooks, disaster scenarios. Diagrams from `architecture.drawio` (exported PNG).
+- **Success:** `make manual` produces `guacamole-operator-manual.pdf`; CI attaches it to releases.
+
+### Phase 18: `iac/` multi-tool implementations  **[XL — recommend trimming]**
+- New branch `iac`, subfolders: `ansible/` (move current), then **parallel re-implementations**:
+  `puppet/`, `nix/` (NixOS module), `chef/` (cookbook), `terraform-cdk/` (CDKTF Python).
+- **Reality check:** this is 4 full re-implementations to build **and keep in sync** with every
+  future change. Strong recommendation: keep Ansible as the config-management source of truth and
+  pick **one** alternative if there's a real driver (e.g. NixOS module for reproducibility, *or*
+  Puppet if that's the site standard). Confirm before starting.
+- **Success (per tool chosen):** produces a working, idempotent Guacamole host matching the
+  Ansible build; its own CI leg.
+
+### Phase 19: AWS deployment (Python CDK)  **[L] — needs creds**
+- `iac/aws-cdk/` (Python): VPC with JSON-driven public/private subnets, ALB (TLS 1.3, ACM cert)
+  → private EC2 running the Ansible build via user-data/SSM, RDS MariaDB (private), security
+  groups from the FIREWALL.md matrix, Secrets Manager for DB/LDAP/Duo, CloudWatch/S3 for logs +
+  backup bundles. All sizing/subnets/toggles from a single `config.json`.
+- **Success:** `cdk deploy` → reachable Guacamole; `cdk destroy` leaves nothing. Tested with
+  **user-supplied creds**, **cleaned up immediately after**.
+
+### Phase 20: Azure deployment  **[L] — needs creds**
+- `iac/azure/` equivalent (Bicep or CDKTF): VNet + subnets from JSON, App Gateway (TLS 1.3) →
+  private VM, Azure Database for MariaDB (private), NSGs from FIREWALL.md, Key Vault, Log
+  Analytics + storage for logs/backups.
+- **Success:** deploy → reachable → destroy clean. Tested with **user-supplied creds**, cleaned
+  up immediately.
+
+**Cloud credential handling:** creds are only used for a deploy→verify→**destroy** cycle; nothing
+persisted; teardown confirmed by `cdk destroy` / `az group delete` + a resource-list check.
+
+---
+
 ## Coverage
 
-All 40 v1 requirements mapped. Phases 1-6 sequential (parallelization disabled in config).
+Milestone 1 (Phases 1-9): implemented; RHEL validated. Milestone 2 (Phases 10-20): planned, sized above.
