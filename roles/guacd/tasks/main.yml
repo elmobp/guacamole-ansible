@@ -11,10 +11,11 @@
 
 - name: Install guacd optional build libraries (best effort)
   ansible.builtin.dnf:
-    name: "{{ item }}"
+    name: "{{ guacd_build_libs_optional }}"
     state: present
-  loop: "{{ guacd_build_libs_optional }}"
+    skip_broken: true
   failed_when: false
+  changed_when: false
 
 - name: Detect installed guacd version
   ansible.builtin.command: "{{ guac_server_prefix }}/sbin/guacd -v"
@@ -104,7 +105,7 @@
     group: root
     mode: "0644"
   notify:
-    - Reload systemd
+    - Reload systemd guacd
     - Restart guacd
 
 - name: Flush handlers (guacd must be up before client role)

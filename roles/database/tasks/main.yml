@@ -167,7 +167,7 @@
     owner: root
     group: root
     mode: "0644"
-  notify: Restart tomcat
+  # No tomcat restart here — tomcat is installed later and starts fresh with this jar present.
 
 # --- Backup job ------------------------------------------------------
 - name: Include backup job tasks

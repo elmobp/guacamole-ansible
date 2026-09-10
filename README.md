@@ -21,7 +21,7 @@ site.yml                 # full build
 ansible.cfg
 inventory/hosts.ini      # default: localhost (local connection)
 group_vars/all.yml       # EVERY tunable (versions, DB creds, cert attrs, proxy DNS, toggles)
-requirements.yml         # ansible.posix, community.mysql, community.general
+requirements.yml         # ansible.posix, community.mysql
 roles/
   common/                # repos (EPEL/CRB), packages, firewalld, SELinux, guacd user, GUACAMOLE_HOME
   database/              # MariaDB, guac DB/user, schema import, connector/j, backup job

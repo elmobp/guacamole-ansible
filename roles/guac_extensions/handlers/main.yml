@@ -1,5 +1,2 @@
 ---
-- name: Restart tomcat
-  ansible.builtin.service:
-    name: tomcat
-    state: restarted
+# "Restart tomcat" is defined once in the guacamole_client role and resolved play-wide.
