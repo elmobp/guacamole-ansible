@@ -103,9 +103,11 @@ extensions, and the two-distro test harness.
 
 ## Milestone 2 — requested 2026-09-10 (sized honestly, sequenced)
 
+**Phases 10-14 implemented 2026-09-10 (code committed; validate via CI or `test/run.sh`).**
+
 Pick phases to run; they are mostly independent. Sizes: **S** ≈ hours, **M** ≈ a day, **L** ≈ multi-day, **XL** ≈ a project.
 
-### Phase 10: CI build cache + per-distro images  **[M]**
+### Phase 10 ✅ CI build cache + per-distro images  **[M]**
 - Cache the compiled `guacd` tree (+ war/jar downloads) in GitHub Actions keyed on
   `guac_version` + arch + distro; playbook installs from cache, **skips the compile step** when the
   cached binary matches. Local `guac_build_dir` becomes a restorable cache dir.
@@ -113,26 +115,26 @@ Pick phases to run; they are mostly independent. Sizes: **S** ≈ hours, **M** �
   to `ghcr.io` (or artifact) on tag.
 - **Success:** second CI run for an unchanged `guac_version` does not recompile; 7 images build.
 
-### Phase 11: Build Guacamole from a source branch  **[M]**
+### Phase 11 ✅ Build Guacamole from a source branch  **[M]**
 - `guac_source_ref` (tag | branch | commit) + `guac_source_repo` — when set, `git clone` +
   `mvn package` the client and `autoreconf && ./configure && make` the server from that ref
   instead of the release tarball. Version string derived from the ref.
 - CI: this path tested **on OL only** (per request); release-tarball path stays the matrix default.
 - **Success:** `-e guac_source_ref=1.6.0` builds + logs in on OL9.
 
-### Phase 12: Backend RDP session load balancing  **[S–M]**
+### Phase 12 ✅ Backend RDP session load balancing  **[S–M]**
 - `connections` module already accepts `type: BALANCING` groups; add: member weighting,
   `enable-session-affinity`, health note, and docs/example. Optional: guacd behind
   multiple backends via balancing group of identical connections.
 - **Success:** a balancing group with 3 RDP members round-robins; affinity honoured.
 
-### Phase 13: RBAC via LDAP groups  **[M]**
+### Phase 13 ✅ RBAC via LDAP groups  **[M]**
 - LDAP extension: `ldap-group-base-dn`, `ldap-member-attribute`, group→connection mapping in the
   Guacamole schema; `guac_ldap_rbac` list: `{ group_dn, connections: [...], groups: [...], system: [...] }`
   reconciled by the `connections` module (grant to `USER_GROUP` entities).
 - **Success:** members of `CN=guac-web,OU=...` see only the `web` connections; non-members don't.
 
-### Phase 14: External log forwarding over TLS  **[M]**
+### Phase 14 ✅ External log forwarding over TLS  **[M]**
 - Extend `hardening`: rsyslog **RELP + TLS** (or omfwd + TLS), CA + client cert config
   (`guac_syslog_tls_ca`, `_cert`, `_key`, `guac_syslog_relp`), `audisp` → rsyslog → collector.
   Plain TCP/UDP stays available; TLS is the recommended path.
