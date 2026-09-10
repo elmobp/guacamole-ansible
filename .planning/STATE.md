@@ -53,7 +53,9 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
   — full `site.yml`, idempotent `changed=0`, `check.sh` all green.
 - Session fixes: FreeRDP 3.15 build (`a5c006c`), block-notify→task-notify (`1b85215`),
   run.sh failure propagation (`ea1f39b`) + source guard (`aeafb87`), chrony/26.04 idempotence (`b359f52`).
-- Still TODO: `test/dr.sh ol9`, `test/upgrade.sh ol9 1.5.5 1.6.0`, `podman build` image smoke,
+- **`test/dr.sh ol9` PASSED** — backup host A → restore fresh host B → guacadmin login + marker
+  connection intact. Needed dr.sh fix `2a1d…` (stream bundle A→B; macOS `/tmp` is a symlink).
+- Still TODO: `test/upgrade.sh ol9 1.5.5 1.6.0` (running), `podman build` image smoke,
   phase-11 source-ref smoke (`-e guac_source_ref=1.6.0` on ol9).
 
 ```
