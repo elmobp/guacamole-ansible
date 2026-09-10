@@ -1,18 +1,20 @@
-# Ansible Guacamole Installer (RHEL edition)
+# Ansible Guacamole
 
 ## What This Is
 
 An Ansible-native reimplementation of [itiligent/Easy-Guacamole-Installer](https://github.com/itiligent/Easy-Guacamole-Installer).
 It stands up an Apache Guacamole jump-host — guacamole-server (guacd) built from source, the
-Guacamole web client on Tomcat, a MariaDB/MySQL JDBC auth backend, an Nginx TLS reverse
-proxy, and optional auth/console extensions — entirely through idempotent Ansible roles
-instead of the original suite of numbered bash scripts. Target platform is RHEL 9 and RHEL 10
-(and binary-compatible rebuilds: Oracle Linux, Rocky, Alma).
+Guacamole web client on Tomcat, a MariaDB/MySQL JDBC auth backend (local or a separate DB
+server), an Nginx TLS-1.3 reverse proxy, toggle-driven auth/console extensions, declarative
+backend connections/users, CIS-aligned hardening, and BCP/DR backup/restore — entirely through
+idempotent Ansible roles instead of the original numbered bash scripts. Also ships a container
+image + compose stack. Platforms: RHEL/Oracle/Rocky/Alma 9-10, Debian 12-13, Ubuntu 22.04/24.04.
 
 ## Core Value
 
-`ansible-playbook site.yml` against a fresh RHEL 9 or RHEL 10 host produces a working
-Guacamole login page reachable over an HTTPS reverse proxy, with `guacadmin` able to sign in.
+`ansible-playbook site.yml` against a fresh supported host produces a working Guacamole login
+page reachable over an HTTPS reverse proxy, with `guacadmin` able to sign in — and re-running it
+(including after a `guac_version` bump) is safe and idempotent.
 
 ## Requirements
 
