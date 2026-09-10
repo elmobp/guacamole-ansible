@@ -10,6 +10,9 @@ No numbered shell scripts — everything is an idempotent role.
 - **[docs/CONFIGURE.md](docs/CONFIGURE.md)** — every variable explained in plain English
 - **[docs/SCENARIOS.md](docs/SCENARIOS.md)** — copy-paste configs (separate DB, MFA, LDAP, RDP/SSH targets, prod TLS, FIPS, ...)
 - **[docs/OPERATIONS.md](docs/OPERATIONS.md)** — upgrades, backup/restore/DR runbook, hardening, containers
+- **[docs/FIREWALL.md](docs/FIREWALL.md)** — every port and data flow, for firewall change requests
+- **[docs/LLD-RHEL-IRAP.md](docs/LLD-RHEL-IRAP.md)** — copy-and-complete low-level design for a RHEL build, with a scoped Australian ISM control mapping
+- **[docs/architecture.drawio](docs/architecture.drawio)** — data-flow architecture diagram (open in [draw.io](https://app.diagrams.net))
 
 **Supported platforms**
 
