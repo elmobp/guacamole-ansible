@@ -41,9 +41,7 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
 | 15 full CIS L2 coverage | ○ planned (vendor ansible-lockdown CIS + OpenSCAP gate) |
 | 16 deep ISM alignment + LLD rewrite | ○ planned |
 | 17 operator manual → PDF | ○ planned |
-| 18 iac/ multi-tool (puppet/nix/chef/terraform-cdk) | ○ planned — RECOMMEND trimming to one; needs user decision |
-| 19 AWS Python CDK stack | ○ blocked on user creds; must destroy after test |
-| 20 Azure stack | ○ blocked on user creds; must destroy after test |
+| 18/19/20 | ❌ descoped 2026-09-11 (Puppet/Nix/Chef/Terraform + AWS + Azure) | |
 
 ## Phases 10–14 — NOT yet run live (context ran out). Validate with:
 

@@ -103,6 +103,8 @@ extensions, and the two-distro test harness.
 
 ## Milestone 2 — requested 2026-09-10 (sized honestly, sequenced)
 
+**Descoped 2026-09-11:** Phases 18 (Puppet/Nix/Chef/Terraform CDK), 19 (AWS), 20 (Azure). Remaining M2 work: 15 (CIS L2), 16 (ISM+LLD), 17 (PDF manual).
+
 **Phases 10-14 implemented + validated on OL9 (2026-09-11): base PASS, M2 smoke failed=0, idempotent, BALANCING/RBAC/TLS-syslog asserted.**
 
 Pick phases to run; they are mostly independent. Sizes: **S** ≈ hours, **M** ≈ a day, **L** ≈ multi-day, **XL** ≈ a project.
@@ -165,7 +167,7 @@ Pick phases to run; they are mostly independent. Sizes: **S** ≈ hours, **M** �
   troubleshooting runbooks, disaster scenarios. Diagrams from `architecture.drawio` (exported PNG).
 - **Success:** `make manual` produces `guacamole-operator-manual.pdf`; CI attaches it to releases.
 
-### Phase 18: `iac/` multi-tool implementations  **[XL — recommend trimming]**
+### Phase 18: `iac/` multi-tool implementations  — ❌ DESCOPED 2026-09-11 (out of scope)
 - New branch `iac`, subfolders: `ansible/` (move current), then **parallel re-implementations**:
   `puppet/`, `nix/` (NixOS module), `chef/` (cookbook), `terraform-cdk/` (CDKTF Python).
 - **Reality check:** this is 4 full re-implementations to build **and keep in sync** with every
@@ -175,7 +177,7 @@ Pick phases to run; they are mostly independent. Sizes: **S** ≈ hours, **M** �
 - **Success (per tool chosen):** produces a working, idempotent Guacamole host matching the
   Ansible build; its own CI leg.
 
-### Phase 19: AWS deployment (Python CDK)  **[L] — needs creds**
+### Phase 19: AWS deployment (Python CDK)  — ❌ DESCOPED 2026-09-11 (out of scope)
 - `iac/aws-cdk/` (Python): VPC with JSON-driven public/private subnets, ALB (TLS 1.3, ACM cert)
   → private EC2 running the Ansible build via user-data/SSM, RDS MariaDB (private), security
   groups from the FIREWALL.md matrix, Secrets Manager for DB/LDAP/Duo, CloudWatch/S3 for logs +
@@ -183,14 +185,14 @@ Pick phases to run; they are mostly independent. Sizes: **S** ≈ hours, **M** �
 - **Success:** `cdk deploy` → reachable Guacamole; `cdk destroy` leaves nothing. Tested with
   **user-supplied creds**, **cleaned up immediately after**.
 
-### Phase 20: Azure deployment  **[L] — needs creds**
+### Phase 20: Azure deployment  — ❌ DESCOPED 2026-09-11 (out of scope)
 - `iac/azure/` equivalent (Bicep or CDKTF): VNet + subnets from JSON, App Gateway (TLS 1.3) →
   private VM, Azure Database for MariaDB (private), NSGs from FIREWALL.md, Key Vault, Log
   Analytics + storage for logs/backups.
 - **Success:** deploy → reachable → destroy clean. Tested with **user-supplied creds**, cleaned
   up immediately.
 
-**Cloud credential handling:** creds are only used for a deploy→verify→**destroy** cycle; nothing
+_Cloud credential handling (descoped):_ creds are only used for a deploy→verify→**destroy** cycle; nothing
 persisted; teardown confirmed by `cdk destroy` / `az group delete` + a resource-list check.
 
 ---
