@@ -20,6 +20,19 @@
   retries: 3
   delay: 20
 
+- name: Install FreeRDP dev headers (Debian family — try 3.x then 2.x)
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ guacd_freerdp_candidates }}"
+  failed_when: false
+  when: ansible_os_family == "Debian"
+
+- name: Verify a FreeRDP dev package is installed (Debian family)
+  ansible.builtin.shell: "dpkg -s freerdp3-dev >/dev/null 2>&1 || dpkg -s freerdp2-dev >/dev/null 2>&1"
+  changed_when: false
+  when: ansible_os_family == "Debian"
+
 - name: Install guacd optional build libraries (best effort)
   ansible.builtin.package:
     name: "{{ item }}"

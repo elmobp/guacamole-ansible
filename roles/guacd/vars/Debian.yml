@@ -7,11 +7,11 @@ guacd_build_toolchain:
   - libtool-bin
   - pkg-config
 
-# FreeRDP dev package: 3.x on newer releases, 2.x on older (matches reference logic)
-guacd_freerdp_pkg: >-
-  {{ 'freerdp3-dev'
-     if ansible_distribution_release | lower in ['bookworm', 'trixie', 'forky', 'noble', 'oracular', 'plucky']
-     else 'freerdp2-dev' }}
+# FreeRDP dev package is resolved at runtime (freerdp3-dev where present, else freerdp2-dev)
+# by roles/guacd/tasks/main.yml — see _freerdp_pkg.
+guacd_freerdp_candidates:
+  - freerdp3-dev
+  - freerdp2-dev
 
 guacd_build_libs:
   - libcairo2-dev
@@ -28,7 +28,6 @@ guacd_build_libs:
   - libwebp-dev
   - libossp-uuid-dev
   - uuid-dev
-  - "{{ guacd_freerdp_pkg }}"
 
 guacd_build_libs_optional:
   - libavcodec-dev
