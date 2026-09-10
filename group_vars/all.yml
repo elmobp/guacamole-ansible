@@ -114,7 +114,7 @@ guac_url_redirect: true                          # /  ->  /guacamole  (only when
 guac_tls_mode: "self-signed"                     # self-signed | letsencrypt | none
 
 # Self-signed cert attributes (reference: CERT_* / RSA_KEYLENGTH)
-guac_cert_rsa_keylength: 2048
+guac_cert_rsa_keylength: 3072                    # ISM: RSA modulus >= 3072 preferred
 guac_cert_country: "AU"
 guac_cert_state: "Victoria"
 guac_cert_location: "Melbourne"
@@ -171,6 +171,14 @@ guac_hardening_enabled: true
 guac_hardening_level: "l2"                       # l1 | l2
 guac_hardening_ssh_password_auth: true           # false = key-only SSH
 guac_fips_enabled: false                         # opt-in; needs a reboot, can lock you out
+guac_hardening_time_sync: true                   # chrony
+guac_hardening_ntp_servers: []                   # [] => distro pool
+guac_syslog_target: ""                           # "collector:6514" => forward all logs (central logging)
+guac_syslog_protocol: "tcp"
+guac_auto_patch: false                           # dnf-automatic / unattended-upgrades (security only)
+
+# Guacamole web session inactivity timeout (minutes). 0 / "" => Guacamole default (60).
+guac_session_timeout_minutes: 15
 
 # ---------------------------------------------------------------------------
 # Backup / BCP-DR — see roles/backup/defaults/main.yml

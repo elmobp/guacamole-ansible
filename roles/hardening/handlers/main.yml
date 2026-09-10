@@ -12,6 +12,20 @@
   changed_when: true
   failed_when: false
 
+- name: Restart chrony
+  ansible.builtin.service:
+    name: "{{ 'chronyd' if ansible_os_family == 'RedHat' else 'chrony' }}"
+    state: restarted
+  when: not (guac_container_build | bool)
+  failed_when: false
+
+- name: Restart rsyslog
+  ansible.builtin.service:
+    name: rsyslog
+    state: restarted
+  when: not (guac_container_build | bool)
+  failed_when: false
+
 - name: Restart tomcat
   ansible.builtin.service:
     name: tomcat

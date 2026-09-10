@@ -135,6 +135,119 @@
         - /etc/cron.allow
         - /etc/at.allow
 
+    # --- Time synchronisation (accurate time source) ---------------
+    - name: Install chrony
+      ansible.builtin.package:
+        name: chrony
+        state: present
+      when: guac_hardening_time_sync | bool
+
+    - name: Configure chrony NTP servers
+      ansible.builtin.copy:
+        dest: "{{ '/etc/chrony.conf' if ansible_os_family == 'RedHat' else '/etc/chrony/chrony.conf' }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by Ansible (ansible-guacamole)
+          {% for s in guac_hardening_ntp_servers %}
+          server {{ s }} iburst
+          {% endfor %}
+          {% if not guac_hardening_ntp_servers %}
+          pool {{ '2.rhel.pool.ntp.org' if ansible_os_family == 'RedHat' else '2.debian.pool.ntp.org' }} iburst
+          {% endif %}
+          driftfile /var/lib/chrony/drift
+          makestep 1.0 3
+          rtcsync
+          logdir /var/log/chrony
+      when: guac_hardening_time_sync | bool
+      notify: Restart chrony
+
+    - name: Enable chrony
+      ansible.builtin.service:
+        name: "{{ 'chronyd' if ansible_os_family == 'RedHat' else 'chrony' }}"
+        state: started
+        enabled: true
+      when:
+        - guac_hardening_time_sync | bool
+        - not (guac_container_build | bool)
+      failed_when: false
+
+    # --- Central log forwarding -----------------------------------
+    - name: Install rsyslog for log forwarding
+      ansible.builtin.package:
+        name: rsyslog
+        state: present
+      when: guac_syslog_target | length > 0
+
+    - name: Configure remote syslog forwarding
+      ansible.builtin.copy:
+        dest: /etc/rsyslog.d/90-guac-forward.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by Ansible (ansible-guacamole) — forward all logs to the SIEM
+          *.* {{ '@@' if guac_syslog_protocol == 'tcp' else '@' }}{{ guac_syslog_target }}
+      when: guac_syslog_target | length > 0
+      notify: Restart rsyslog
+
+    - name: Forward auditd events to syslog
+      ansible.builtin.lineinfile:
+        path: "{{ '/etc/audit/plugins.d/syslog.conf' if ansible_os_family == 'RedHat' else '/etc/audisp/plugins.d/syslog.conf' }}"
+        regexp: '^active'
+        line: 'active = yes'
+        create: false
+      when:
+        - guac_syslog_target | length > 0
+        - guac_hardening_install_auditd | bool
+      failed_when: false
+      notify: Restart auditd
+
+    # --- Automatic security patching -----------------------------
+    - name: Enable automatic security updates (RHEL)
+      when:
+        - guac_auto_patch | bool
+        - ansible_os_family == "RedHat"
+      block:
+        - name: Install dnf-automatic
+          ansible.builtin.dnf:
+            name: dnf-automatic
+            state: present
+        - name: Configure dnf-automatic for security updates
+          ansible.builtin.lineinfile:
+            path: /etc/dnf/automatic.conf
+            regexp: '{{ item.re }}'
+            line: '{{ item.line }}'
+          loop:
+            - { re: '^upgrade_type', line: 'upgrade_type = security' }
+            - { re: '^apply_updates', line: 'apply_updates = yes' }
+        - name: Enable dnf-automatic timer
+          ansible.builtin.service:
+            name: dnf-automatic.timer
+            state: started
+            enabled: true
+          when: not (guac_container_build | bool)
+
+    - name: Enable automatic security updates (Debian)
+      when:
+        - guac_auto_patch | bool
+        - ansible_os_family == "Debian"
+      block:
+        - name: Install unattended-upgrades
+          ansible.builtin.apt:
+            name: unattended-upgrades
+            state: present
+        - name: Enable unattended-upgrades
+          ansible.builtin.copy:
+            dest: /etc/apt/apt.conf.d/20auto-upgrades
+            owner: root
+            group: root
+            mode: "0644"
+            content: |
+              APT::Periodic::Update-Package-Lists "1";
+              APT::Periodic::Unattended-Upgrade "1";
+
     # --- auditd -----------------------------------------------------
     - name: Install auditd
       ansible.builtin.package:

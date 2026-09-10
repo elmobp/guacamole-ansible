@@ -12,6 +12,17 @@ guac_hardening_blacklist_modules_l2: [usb-storage]
 
 guac_hardening_install_auditd: true
 
+# Time synchronisation (ISM: accurate time source). Uses chrony.
+guac_hardening_time_sync: true
+guac_hardening_ntp_servers: []        # empty => distro/cloud default pool
+
+# Central log forwarding (ISM: event logs stored centrally). Empty => not configured.
+guac_syslog_target: ""                # e.g. "logs.corp.example:6514" (TCP) or "@collector:514"
+guac_syslog_protocol: "tcp"           # tcp | udp
+
+# Automatic security patching (ISM: patch cadence). Off by default (change control).
+guac_auto_patch: false
+
 # FIPS: opt-in only. Enabling requires a reboot and can lock you out if the
 # platform is not prepared. Ubuntu needs Ubuntu Pro (`pro enable fips-updates`).
 guac_fips_enabled: false

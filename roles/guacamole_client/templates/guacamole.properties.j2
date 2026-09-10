@@ -3,6 +3,12 @@
 
 guacd-hostname: {{ guac_guacd_bind_host }}
 guacd-port: {{ guac_guacd_bind_port }}
+{% if guac_guacd_tls_enabled | default(false) | bool %}
+guacd-ssl: true
+{% endif %}
+{% if (guac_session_timeout_minutes | default(0) | int) > 0 %}
+api-session-timeout: {{ guac_session_timeout_minutes | int }}
+{% endif %}
 
 # MySQL / MariaDB JDBC authentication
 mysql-hostname: {{ guac_mysql_host }}

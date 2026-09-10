@@ -18,6 +18,8 @@ server {
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Content-Security-Policy "{{ guac_proxy_csp }}" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
 
     location / {
         proxy_pass {{ guac_proxy_upstream }};
