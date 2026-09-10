@@ -3,3 +3,7 @@
 
 guacd_server_archive_url: "{{ guac_apache_dl_base }}/source/guacamole-server-{{ guac_version }}.tar.gz"
 guacd_server_archive_fallback_url: "{{ guac_apache_archive_base }}/source/guacamole-server-{{ guac_version }}.tar.gz"
+
+# Source-ref build (see group_vars/all.yml). Empty => release tarball.
+guac_source_repo: "https://github.com/apache/guacamole-server"
+guac_source_ref: ""

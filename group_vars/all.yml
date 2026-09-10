@@ -214,3 +214,8 @@ guac_syslog_tls_permitted_peer: ""                # collector cert CN/SAN
 guac_syslog_tls_ca: ""                            # PEM: collector CA  (vault)
 guac_syslog_tls_cert: ""                          # PEM: client cert   (vault, optional mutual TLS)
 guac_syslog_tls_key: ""                           # PEM: client key    (vault)
+
+# Build guacamole-server (guacd) from a git ref instead of the release tarball.
+# Empty => use the pinned release. Test this path on OL only.
+guac_source_repo: "https://github.com/apache/guacamole-server"
+guac_source_ref: ""                               # branch | tag | commit (e.g. "1.6.0", "main")

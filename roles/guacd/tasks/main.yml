@@ -41,20 +41,48 @@
   failed_when: false
   changed_when: false
 
-- name: Detect installed guacd version
-  ansible.builtin.command: "{{ guac_server_prefix }}/sbin/guacd -v"
-  register: _guacd_v
+- name: Detect installed guacd build identity
+  ansible.builtin.command: "cat {{ guac_server_prefix }}/.guacd_build_id"
+  register: _guacd_bid
   changed_when: false
   failed_when: false
 
-- name: Set build flag
+- name: Set build identity + flag
   ansible.builtin.set_fact:
-    _guacd_needs_build: "{{ guac_version not in (_guacd_v.stdout | default('')) }}"
+    _guacd_build_id: "{{ ('src:' ~ guac_source_repo ~ '@' ~ guac_source_ref) if (guac_source_ref | length > 0) else ('release:' ~ guac_version) }}"
+    _guacd_src_dir: "{{ (guac_build_dir ~ '/guacamole-server-src') if (guac_source_ref | length > 0) else (guac_build_dir ~ '/guacamole-server-' ~ guac_version) }}"
+
+- name: Compute build flag
+  ansible.builtin.set_fact:
+    _guacd_needs_build: "{{ (_guacd_bid.stdout | default('')) != _guacd_build_id }}"
 
 - name: Build and install guacamole-server
   when: _guacd_needs_build | bool
   block:
-    - name: Download guacamole-server source
+    - name: Install SCM tooling (source-ref build)
+      ansible.builtin.package:
+        name: "{{ ['git'] + (['libtool-ltdl-devel'] if ansible_os_family == 'RedHat' else []) }}"
+        state: present
+      when: guac_source_ref | length > 0
+
+    - name: Checkout guacamole-server at ref
+      ansible.builtin.git:
+        repo: "{{ guac_source_repo }}"
+        dest: "{{ _guacd_src_dir }}"
+        version: "{{ guac_source_ref }}"
+        depth: 1
+        force: true
+      when: guac_source_ref | length > 0
+
+    - name: Autoreconf source tree
+      ansible.builtin.command:
+        cmd: autoreconf -fi
+        chdir: "{{ _guacd_src_dir }}"
+      when: guac_source_ref | length > 0
+      changed_when: true
+
+    - name: Download guacamole-server release tarball
+      when: guac_source_ref | length == 0
       block:
         - name: Fetch server source (primary mirror)
           ansible.builtin.get_url:
@@ -68,16 +96,17 @@
             dest: "{{ guac_build_dir }}/guacamole-server-{{ guac_version }}.tar.gz"
             mode: "0644"
 
-    - name: Unpack guacamole-server source
+    - name: Unpack guacamole-server release tarball
       ansible.builtin.unarchive:
         src: "{{ guac_build_dir }}/guacamole-server-{{ guac_version }}.tar.gz"
         dest: "{{ guac_build_dir }}"
         remote_src: true
-        creates: "{{ guac_build_dir }}/guacamole-server-{{ guac_version }}/configure"
+        creates: "{{ _guacd_src_dir }}/configure"
+      when: guac_source_ref | length == 0
 
     - name: Apply custom RDP share/printer labels
       ansible.builtin.replace:
-        path: "{{ guac_build_dir }}/guacamole-server-{{ guac_version }}/src/protocols/rdp/settings.c"
+        path: "{{ _guacd_src_dir }}/src/protocols/rdp/settings.c"
         regexp: '{{ item.re }}'
         replace: '{{ item.rep }}'
       loop:
@@ -89,27 +118,34 @@
     - name: Configure guacamole-server
       ansible.builtin.command:
         cmd: "./configure --prefix={{ guac_server_prefix }} --with-systemd-dir=/etc/systemd/system {{ guac_server_configure_extra }}"
-        chdir: "{{ guac_build_dir }}/guacamole-server-{{ guac_version }}"
+        chdir: "{{ _guacd_src_dir }}"
       environment:
         CFLAGS: "-Wno-error"
-      register: _guacd_configure
       changed_when: true
 
     - name: Compile guacamole-server
       ansible.builtin.command:
         cmd: "make -j{{ ansible_processor_vcpus | default(2) }}"
-        chdir: "{{ guac_build_dir }}/guacamole-server-{{ guac_version }}"
+        chdir: "{{ _guacd_src_dir }}"
       changed_when: true
 
     - name: Install guacamole-server
       ansible.builtin.command:
         cmd: make install
-        chdir: "{{ guac_build_dir }}/guacamole-server-{{ guac_version }}"
+        chdir: "{{ _guacd_src_dir }}"
       changed_when: true
 
     - name: Refresh linker cache
       ansible.builtin.command: ldconfig
       changed_when: true
+
+    - name: Record guacd build identity
+      ansible.builtin.copy:
+        dest: "{{ guac_server_prefix }}/.guacd_build_id"
+        content: "{{ _guacd_build_id }}\n"
+        owner: root
+        group: root
+        mode: "0644"
   notify: Restart guacd
 
 - name: Deploy guacd.conf
