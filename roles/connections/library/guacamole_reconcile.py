@@ -53,7 +53,9 @@ class Guac:
 
     # --- groups -------------------------------------------------------
     def group_tree(self):
-        return self.req("GET", "/session/data/%s/connectionGroups" % self.ds)
+        t = self.req("GET", "/session/data/%s/connectionGroups/ROOT/tree" % self.ds)
+        t.setdefault("identifier", "ROOT")
+        return t
 
     def create_group(self, parent_id, name, gtype):
         return self.req("POST", "/session/data/%s/connectionGroups" % self.ds, body={
