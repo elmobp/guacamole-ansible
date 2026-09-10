@@ -50,6 +50,12 @@ guac_proxy_site: "{{ guac_fqdn }}"
 guac_container_build: false                      # true during image build: skip systemd service
                                                 # start/enable, firewall and SELinux management
 
+# Debian/Ubuntu: optionally point apt at a faster regional mirror.
+#   Debian example:  http://kartolo.sby.datautama.net.id/debian
+#   Ubuntu (arm64):  http://ports.ubuntu.com/ubuntu-ports
+guac_apt_mirror: ""
+guac_apt_security_mirror: "http://security.debian.org/debian-security"
+
 # RHEL-family repo handling (ignored on Debian family)
 guac_enable_epel: true
 guac_enable_crb: true                           # CRB (EL9/10) / PowerTools

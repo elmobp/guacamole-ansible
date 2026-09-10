@@ -10,10 +10,37 @@
       Acquire::http::Timeout "30";
       Acquire::https::Timeout "30";
 
+- name: Override apt mirror (optional — for slow default mirrors / regional CDNs)
+  when: guac_apt_mirror | default('') | length > 0
+  block:
+    - name: Remove deb822 default sources
+      ansible.builtin.file:
+        path: "/etc/apt/sources.list.d/{{ 'ubuntu.sources' if ansible_distribution == 'Ubuntu' else 'debian.sources' }}"
+        state: absent
+
+    - name: Write mirror sources.list
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          {% set c = ansible_distribution_release %}
+          {% if ansible_distribution == 'Ubuntu' %}
+          deb {{ guac_apt_mirror }} {{ c }} main universe
+          deb {{ guac_apt_mirror }} {{ c }}-updates main universe
+          deb {{ guac_apt_mirror }} {{ c }}-security main universe
+          {% else %}
+          deb {{ guac_apt_mirror }} {{ c }} main
+          deb {{ guac_apt_mirror }} {{ c }}-updates main
+          deb {{ guac_apt_security_mirror | default('http://security.debian.org/debian-security') }} {{ c }}-security main
+          {% endif %}
+      register: _apt_sources
+
 - name: Refresh apt cache
   ansible.builtin.apt:
     update_cache: true
-    cache_valid_time: 3600
+    cache_valid_time: "{{ 0 if _apt_sources.changed | default(false) else 3600 }}"
   register: _apt_update
   until: _apt_update is succeeded
   retries: 5

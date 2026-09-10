@@ -77,6 +77,36 @@ run_one() {
     sleep 2
   done
 
+  # Optional apt mirror override for the slow test network.
+  #   DEB_MIRROR   default http://kartolo.sby.datautama.net.id/debian   (arm64, ~13 MB/s here)
+  #   UBU_MIRROR   default http://ports.ubuntu.com/ubuntu-ports         (arm64 archive)
+  local DEB_MIRROR="${DEB_MIRROR:-http://kartolo.sby.datautama.net.id/debian}"
+  local UBU_MIRROR="${UBU_MIRROR:-http://ports.ubuntu.com/ubuntu-ports}"
+  case "$base" in
+    debian:*)
+      podman exec "$ctr" bash -lc "
+        C=\$(. /etc/os-release; echo \$VERSION_CODENAME)
+        rm -f /etc/apt/sources.list.d/debian.sources
+        cat > /etc/apt/sources.list <<EOF
+deb ${DEB_MIRROR} \$C main
+deb ${DEB_MIRROR} \$C-updates main
+deb http://security.debian.org/debian-security \$C-security main
+EOF
+        echo 'Acquire::Retries \"5\"; Acquire::http::Timeout \"30\";' > /etc/apt/apt.conf.d/80-guac-retries
+      " ;;
+    ubuntu:*)
+      podman exec "$ctr" bash -lc "
+        C=\$(. /etc/os-release; echo \$VERSION_CODENAME)
+        rm -f /etc/apt/sources.list.d/ubuntu.sources
+        cat > /etc/apt/sources.list <<EOF
+deb ${UBU_MIRROR} \$C main universe
+deb ${UBU_MIRROR} \$C-updates main universe
+deb ${UBU_MIRROR} \$C-security main universe
+EOF
+        echo 'Acquire::Retries \"5\"; Acquire::http::Timeout \"30\";' > /etc/apt/apt.conf.d/80-guac-retries
+      " ;;
+  esac
+
   # Bootstrap Ansible (control tooling only — not part of the product).
   podman exec "$ctr" bash -lc '
     set -e
