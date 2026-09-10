@@ -45,8 +45,13 @@ run_one() {
     set -e
     dnf -y install "oracle-epel-release-el$(rpm -E %rhel)" >/dev/null 2>&1 || \
       dnf -y install "https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm" >/dev/null
-    dnf -y install ansible >/dev/null
     mkdir -p /root/guac && cp -a /opt/guac-ansible/. /root/guac/
+    if dnf -y install ansible >/dev/null 2>&1; then
+      echo "using bundled ansible package"
+    else
+      dnf -y install ansible-core >/dev/null
+      cd /root/guac && ansible-galaxy collection install -r requirements.yml >/dev/null
+    fi
   '
 
   # First run
