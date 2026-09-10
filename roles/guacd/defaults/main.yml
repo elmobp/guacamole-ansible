@@ -7,3 +7,8 @@ guacd_server_archive_fallback_url: "{{ guac_apache_archive_base }}/source/guacam
 # Source-ref build (see group_vars/all.yml). Empty => release tarball.
 guac_source_repo: "https://github.com/apache/guacamole-server"
 guac_source_ref: ""
+
+# CPPFLAGS for ./configure. The default silences FreeRDP 3.x deprecation warnings so
+# guacamole-server's -Werror feature probes pass (needed on Debian 13 / Ubuntu 24.04+).
+# Harmless on FreeRDP 2.x platforms (RHEL 9/10, Debian 12).
+guac_server_configure_cppflags: "-Wno-error=deprecated-declarations"

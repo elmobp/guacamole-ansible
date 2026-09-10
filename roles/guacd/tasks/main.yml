@@ -121,6 +121,11 @@
         chdir: "{{ _guacd_src_dir }}"
       environment:
         CFLAGS: "-Wno-error"
+        # FreeRDP 3.x (Debian 13, Ubuntu 24.04+) headers emit -Wdeprecated-declarations
+        # warnings; guacamole-server's ./configure feature probes run with -Werror, so
+        # without this the FREERDP_HAS_CONTEXT probe fails and the RDP build breaks on
+        # 'struct rdp_freerdp has no member named input'. CPPFLAGS lands after -Werror.
+        CPPFLAGS: "{{ guac_server_configure_cppflags }}"
       changed_when: true
 
     - name: Compile guacamole-server

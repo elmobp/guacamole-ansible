@@ -81,6 +81,9 @@ guac_guacd_bind_host: "127.0.0.1"
 guac_guacd_bind_port: 4822
 # Extra configure flags for guacamole-server ./configure
 guac_server_configure_extra: ""                 # e.g. "--enable-allow-freerdp-snapshots"
+# CPPFLAGS for ./configure — default silences FreeRDP 3.x deprecation warnings that
+# would otherwise fail guacamole-server's -Werror feature probes (Debian 13, Ubuntu 24.04+).
+guac_server_configure_cppflags: "-Wno-error=deprecated-declarations"
 
 # ---------------------------------------------------------------------------
 # Database (reference: INSTALL_MYSQL / MYSQL_* / GUAC_* / SECURE_MYSQL)
