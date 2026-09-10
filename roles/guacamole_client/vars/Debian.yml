@@ -1,0 +1,5 @@
+---
+# default-jre-headless resolves to the release's supported OpenJDK (17 on Debian 12,
+# 21 on Ubuntu 24.04, etc). Tomcat 9 runs on all of them.
+guac_client_java_packages:
+  - default-jre-headless

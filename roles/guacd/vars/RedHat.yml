@@ -1,0 +1,33 @@
+---
+guacd_build_toolchain:
+  - gcc
+  - gcc-c++
+  - make
+  - autoconf
+  - automake
+  - libtool
+  - libtool-ltdl-devel
+  - pkgconf-pkg-config
+
+guacd_build_libs:
+  - cairo-devel
+  - libjpeg-turbo-devel
+  - libpng-devel
+  - libuuid-devel
+  - freerdp-devel
+  - pango-devel
+  - libssh2-devel
+  - libtelnet-devel
+  - libvncserver-devel
+  - libwebsockets-devel
+  - pulseaudio-libs-devel
+  - libvorbis-devel
+  - libwebp-devel
+  - openssl-devel
+
+guacd_build_libs_optional:
+  - ffmpeg-devel
+  - libavcodec-free-devel
+  - libavformat-free-devel
+  - libavutil-free-devel
+  - libswscale-free-devel

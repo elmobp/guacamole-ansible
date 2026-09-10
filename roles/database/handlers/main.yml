@@ -1,8 +1,6 @@
 ---
 - name: Restart mariadb
   ansible.builtin.service:
-    name: mariadb
+    name: "{{ guac_mariadb_service | default('mariadb') }}"
     state: restarted
   when: guac_install_mariadb | bool
-
-# "Restart tomcat" is defined in the guacamole_client role and resolved play-wide.

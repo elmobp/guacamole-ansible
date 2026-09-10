@@ -1,0 +1,4 @@
+---
+nginx_proxy_packages: [nginx]
+nginx_proxy_le_packages: [certbot, python3-certbot-nginx]
+guac_nginx_user: "www-data"

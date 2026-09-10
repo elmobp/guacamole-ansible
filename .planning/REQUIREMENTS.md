@@ -98,6 +98,23 @@
 - [ ] **IMG-04**: Compose stack reaches a working `guacadmin` login
 - [ ] **IMG-05**: Image build documented in README
 
+### Backup / Restore (BCP/DR)
+
+- [ ] **BDR-01**: `backup` role produces a restorable bundle: DB dump + `/etc/guacamole` (properties, extensions, lib, certs) + guacd.conf
+- [ ] **BDR-02**: `restore` script rebuilds a working Guacamole on a fresh host from a bundle (documented runbook)
+- [ ] **BDR-03**: Backups timestamped, retained per `guac_db_backup_retention_days`, integrity-checked (sha256), optionally encrypted
+- [ ] **BDR-04**: Restore verified end-to-end in the test harness (backup on host A, restore on host B, guacadmin logs in)
+- [ ] **BDR-05**: Scheduled backups via cron/timer; manual `guac-backup` / `guac-restore` CLI wrappers
+
+### Hardening
+
+- [ ] **HRD-01**: `hardening` role, toggle `guac_hardening_enabled`, level `guac_hardening_level: l1|l2`, applied on all supported OS
+- [ ] **HRD-02**: CIS-aligned controls: sysctl/kernel, SSH, auth/pam, mount options, service minimisation, auditd, firewall default-deny
+- [ ] **HRD-03**: App-layer hardening: nginx (no tokens, HSTS, secure headers), Tomcat (shutdown port, no manager, error pages), guacd daemon TLS
+- [ ] **HRD-04**: TLS 1.3 **only**, everywhere TLS is terminated or initiated (nginx, guacd TLS, LDAP where used)
+- [ ] **HRD-05**: FIPS mode enabled where the platform supports it (`guac_fips_enabled`); documented limits (Ubuntu Pro, RHEL fips-mode-setup)
+- [ ] **HRD-06**: Hardening is idempotent and does not break the guacadmin login path; documented residual CIS gaps
+
 ## v2 Requirements
 
 ### Hardening & Ops

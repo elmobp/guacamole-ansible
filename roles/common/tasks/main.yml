@@ -1,76 +1,22 @@
 ---
-- name: Install dnf plugins core
-  ansible.builtin.dnf:
-    name: dnf-plugins-core
-    state: present
+- name: Load OS-family variables
+  ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
 
-# --- EPEL --------------------------------------------------------------------
-- name: Enable EPEL (Oracle Linux package)
-  ansible.builtin.dnf:
-    name: "oracle-epel-release-el{{ ansible_distribution_major_version }}"
-    state: present
-  when:
-    - guac_enable_epel | bool
-    - ansible_distribution == "OracleLinux"
-  register: _epel_ol
-  failed_when: false
+- name: RHEL-family repository + package setup
+  ansible.builtin.include_tasks: redhat.yml
+  when: ansible_os_family == "RedHat"
 
-- name: Enable EPEL (generic epel-release rpm)
-  ansible.builtin.dnf:
-    name: "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm"
-    state: present
-    disable_gpg_check: true
-  when:
-    - guac_enable_epel | bool
-    - ansible_distribution != "OracleLinux"
-    - (_epel_ol is not defined) or (_epel_ol.rc | default(1) != 0)
-
-# --- CRB / CodeReady Builder / PowerTools -----------------------------------
-- name: Enumerate available repository ids
-  ansible.builtin.command: dnf -q repolist --all
-  changed_when: false
-  register: _repolist
-  when: guac_enable_crb | bool
-
-- name: Enable CRB-equivalent repository (dnf4 or dnf5 syntax)
-  ansible.builtin.shell:
-    cmd: >-
-      dnf config-manager --set-enabled {{ item }} 2>/dev/null
-      || dnf config-manager setopt {{ item }}.enabled=1 2>/dev/null
-      || true
-  changed_when: false
-  loop:
-    - "ol{{ ansible_distribution_major_version }}_codeready_builder"
-    - "crb"
-    - "powertools"
-    - "codeready-builder-for-rhel-{{ ansible_distribution_major_version }}-{{ ansible_architecture }}-rpms"
-  when:
-    - guac_enable_crb | bool
-    - _repolist.stdout is defined
-    - item in _repolist.stdout
-
-- name: Enable RPM Fusion free (optional, for ffmpeg-devel)
-  ansible.builtin.dnf:
-    name: "https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-{{ ansible_distribution_major_version }}.noarch.rpm"
-    state: present
-    disable_gpg_check: true
-  when: guac_enable_rpmfusion | bool
-
-- name: Refresh dnf metadata
-  ansible.builtin.dnf:
-    update_cache: true
-  changed_when: false
-
-- name: Install base packages
-  ansible.builtin.dnf:
-    name: "{{ common_base_packages }}"
-    state: present
+- name: Debian-family package setup
+  ansible.builtin.include_tasks: debian.yml
+  when: ansible_os_family == "Debian"
 
 # --- Hostname / local DNS (optional) ---------------------------------------
 - name: Set hostname
   ansible.builtin.hostname:
     name: "{{ guac_fqdn }}"
-  when: guac_manage_hostname | bool
+  when:
+    - guac_manage_hostname | bool
+    - not (guac_container_build | bool)
 
 - name: Ensure /etc/hosts entry for this host
   ansible.builtin.lineinfile:
@@ -80,59 +26,14 @@
     state: present
   when: guac_manage_hostname | bool
 
-# --- Firewall --------------------------------------------------------------
-- name: Enable and start firewalld
-  ansible.builtin.service:
-    name: firewalld
-    state: started
-    enabled: true
-  when: guac_manage_firewall | bool
-  register: _fw_start
-  failed_when: false
-
-- name: Open firewall services/ports
-  ansible.posix.firewalld:
-    service: "{{ item }}"
-    permanent: true
-    immediate: true
-    state: enabled
-  loop:
-    - ssh
-    - http
-    - https
-  when:
-    - guac_manage_firewall | bool
-    - _fw_start.state | default('') == 'started'
-
-- name: Open direct Guacamole port when reverse proxy is disabled
-  ansible.posix.firewalld:
-    port: "8080/tcp"
-    permanent: true
-    immediate: true
-    state: "{{ 'disabled' if guac_install_nginx | bool else 'enabled' }}"
-  when:
-    - guac_manage_firewall | bool
-    - _fw_start.state | default('') == 'started'
-
-- name: Open extra firewall ports
-  ansible.posix.firewalld:
-    port: "{{ item }}"
-    permanent: true
-    immediate: true
-    state: enabled
-  loop: "{{ guac_firewall_extra_ports }}"
-  when:
-    - guac_manage_firewall | bool
-    - _fw_start.state | default('') == 'started'
-
-# --- SELinux --------------------------------------------------------------
+# --- SELinux (RHEL family, enforcing hosts only) --------------------------
 - name: Query SELinux state
   ansible.builtin.command: getenforce
   changed_when: false
   failed_when: false
   register: _selinux
 
-- name: Allow HTTPD/Nginx network connections (proxy to Tomcat)
+- name: Allow web server network connections (proxy to Tomcat)
   ansible.posix.seboolean:
     name: "{{ item }}"
     state: true
@@ -142,7 +43,8 @@
     - httpd_can_network_relay
   when:
     - guac_manage_selinux | bool
-    - _selinux.stdout | default('Disabled') != 'Disabled'
+    - not (guac_container_build | bool)
+    - _selinux.stdout | default('Disabled') not in ['Disabled', '']
 
 # --- guacd service account ----------------------------------------------
 - name: Create locked-down guacd service account

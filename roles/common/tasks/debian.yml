@@ -1,0 +1,36 @@
+---
+- name: Refresh apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name: "{{ common_base_packages }}"
+    state: present
+
+- name: Manage firewall with ufw
+  when:
+    - guac_manage_firewall | bool
+    - not (guac_container_build | bool)
+  block:
+    - name: Configure ufw rules
+      ansible.builtin.command: "ufw {{ item }}"
+      loop:
+        - "allow OpenSSH"
+        - "allow 80/tcp"
+        - "allow 443/tcp"
+        - "{{ 'delete allow 8080/tcp' if guac_install_nginx | bool else 'allow 8080/tcp' }}"
+      changed_when: false
+      failed_when: false
+
+    - name: Open extra ufw ports
+      ansible.builtin.command: "ufw allow {{ item }}"
+      loop: "{{ guac_firewall_extra_ports }}"
+      changed_when: false
+      failed_when: false
+
+    - name: Enable ufw
+      ansible.builtin.command: ufw --force enable
+      changed_when: false
+      failed_when: false

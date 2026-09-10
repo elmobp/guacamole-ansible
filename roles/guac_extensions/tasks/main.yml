@@ -36,13 +36,27 @@
     label: "{{ item.name }}"
   notify: Restart tomcat
 
-- name: Remove disabled extension jars
+- name: Find all installed Guacamole extension jars
+  ansible.builtin.find:
+    paths: "{{ guac_extensions_dir }}"
+    patterns: "*.jar"
+  register: _all_ext_jars
+
+- name: Remove disabled or stale-version extension jars
   ansible.builtin.file:
-    path: "{{ guac_extensions_dir }}/{{ item.name }}-{{ guac_version }}.jar"
+    path: "{{ item.path }}"
     state: absent
-  loop: "{{ _guac_disabled_extensions }}"
+  loop: "{{ _all_ext_jars.files }}"
   loop_control:
-    label: "{{ item.name }}"
+    label: "{{ item.path | basename }}"
+  when: >-
+    (item.path | basename) not in _keep_jars
+  vars:
+    _keep_jars: >-
+      {{ ['guacamole-auth-jdbc-mysql-' ~ guac_version ~ '.jar']
+         + (['branding.jar'] if guac_branding_enabled | bool else [])
+         + (_guac_enabled_extensions | map(attribute='name')
+            | map('regex_replace', '$', '-' ~ guac_version ~ '.jar') | list) }}
   notify: Restart tomcat
 
 # --- History recording storage path ------------------------------------
@@ -73,14 +87,18 @@
   when: not (guac_branding_enabled | bool)
   notify: Restart tomcat
 
-- name: Flush handlers
-  ansible.builtin.meta: flush_handlers
+- name: Finalize extensions
+  when: not (guac_container_build | bool)
+  block:
+    - name: Flush handlers
+      ansible.builtin.meta: flush_handlers
 
-- name: Re-verify Guacamole after extension changes
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:8080/guacamole/"
-    status_code: [200]
-  register: _guac_ext_check
-  until: _guac_ext_check.status == 200
-  retries: 24
-  delay: 5
+    - name: Re-verify Guacamole after extension changes
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:8080/guacamole/"
+        status_code: [200]
+        timeout: 15
+      register: _guac_ext_check
+      until: _guac_ext_check.status == 200
+      retries: 30
+      delay: 5

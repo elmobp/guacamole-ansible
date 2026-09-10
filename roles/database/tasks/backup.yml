@@ -15,9 +15,9 @@
     group: root
     mode: "0750"
 
-- name: Ensure crond is enabled and running
+- name: Ensure cron daemon is enabled and running
   ansible.builtin.service:
-    name: crond
+    name: "{{ guac_cron_service }}"
     state: started
     enabled: true
 

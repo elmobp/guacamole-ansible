@@ -1,0 +1,15 @@
+---
+common_base_packages:
+  - tar
+  - gzip
+  - wget
+  - curl
+  - ca-certificates
+  - openssl
+  - gnupg
+  - lsb-release
+  - python3
+  - python3-apt
+  - cron
+  - ufw
+  - acl

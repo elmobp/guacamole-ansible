@@ -1,19 +1,22 @@
 ---
+- name: Load OS-family variables
+  ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
+
 - name: Install guacd build toolchain
-  ansible.builtin.dnf:
+  ansible.builtin.package:
     name: "{{ guacd_build_toolchain }}"
     state: present
 
 - name: Install guacd required build libraries
-  ansible.builtin.dnf:
+  ansible.builtin.package:
     name: "{{ guacd_build_libs }}"
     state: present
 
 - name: Install guacd optional build libraries (best effort)
-  ansible.builtin.dnf:
-    name: "{{ guacd_build_libs_optional }}"
+  ansible.builtin.package:
+    name: "{{ item }}"
     state: present
-    skip_broken: true
+  loop: "{{ guacd_build_libs_optional }}"
   failed_when: false
   changed_when: false
 
@@ -108,11 +111,14 @@
     - Reload systemd guacd
     - Restart guacd
 
-- name: Flush handlers (guacd must be up before client role)
-  ansible.builtin.meta: flush_handlers
+- name: Finalize guacd service
+  when: not (guac_container_build | bool)
+  block:
+    - name: Flush handlers (guacd must be up before client role)
+      ansible.builtin.meta: flush_handlers
 
-- name: Ensure guacd is enabled and running
-  ansible.builtin.service:
-    name: guacd
-    state: started
-    enabled: true
+    - name: Ensure guacd is enabled and running
+      ansible.builtin.service:
+        name: guacd
+        state: started
+        enabled: true

@@ -1,0 +1,8 @@
+---
+database_server_packages: [mariadb-server, mariadb-client, python3-pymysql]
+database_client_packages: [mariadb-client, python3-pymysql]
+guac_mariadb_socket: "/run/mysqld/mysqld.sock"
+guac_mariadb_service: "mariadb"
+guac_mariadb_tz_conf: "/etc/mysql/mariadb.conf.d/99-guacamole-tz.cnf"
+guac_mariadb_tz_section: "mariadbd"
+guac_cron_service: "cron"

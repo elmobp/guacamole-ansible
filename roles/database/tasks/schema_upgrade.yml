@@ -1,0 +1,43 @@
+---
+# Applies Guacamole JDBC schema upgrade scripts when guac_version is newer than
+# the version recorded in {{ guac_schema_marker }}. Idempotent: once the marker
+# matches guac_version, nothing runs.
+
+- name: Read recorded schema version
+  ansible.builtin.slurp:
+    src: "{{ guac_schema_marker }}"
+  register: _marker_raw
+  failed_when: false
+
+- name: Resolve marker version
+  ansible.builtin.set_fact:
+    _marker_ver: "{{ (_marker_raw.content | b64decode | trim) if _marker_raw.content is defined else '0.0.0' }}"
+
+- name: Locate available upgrade scripts
+  ansible.builtin.find:
+    paths: "{{ guac_build_dir }}/guacamole-auth-jdbc-{{ guac_version }}/mysql/schema/upgrade"
+    patterns: "upgrade-pre-*.sql"
+  register: _upgrade_files
+
+- name: Select applicable upgrade scripts
+  ansible.builtin.set_fact:
+    _upgrades_to_apply: >-
+      {{
+        _upgrade_files.files
+        | map(attribute='path')
+        | map('regex_replace', '.*/upgrade-pre-(.+)\\.sql$', '\\1')
+        | select('version', _marker_ver, '>')
+        | select('version', guac_version, '<=')
+        | list | sort(reverse=false)
+      }}
+
+- name: Show upgrade plan
+  ansible.builtin.debug:
+    msg: "Schema upgrade {{ _marker_ver }} -> {{ guac_version }}: applying {{ _upgrades_to_apply | length }} script(s)"
+
+- name: Apply schema upgrade scripts in order
+  community.mysql.mysql_db:
+    name: "{{ guac_db_name }}"
+    state: import
+    target: "{{ guac_build_dir }}/guacamole-auth-jdbc-{{ guac_version }}/mysql/schema/upgrade/upgrade-pre-{{ item }}.sql"
+  loop: "{{ _upgrades_to_apply }}"

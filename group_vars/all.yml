@@ -42,8 +42,12 @@ guac_fqdn: "{{ guac_server_name }}.{{ guac_local_domain }}"
 guac_proxy_site: "{{ guac_fqdn }}"
 
 # ---------------------------------------------------------------------------
-# Repos / packages (reference: distro package workarounds)
+# Build / packaging behaviour
 # ---------------------------------------------------------------------------
+guac_container_build: false                      # true during image build: skip systemd service
+                                                # start/enable, firewall and SELinux management
+
+# RHEL-family repo handling (ignored on Debian family)
 guac_enable_epel: true
 guac_enable_crb: true                           # CRB (EL9/10) / PowerTools
 guac_enable_rpmfusion: false                    # only for ffmpeg-devel; optional codecs
@@ -72,15 +76,19 @@ guac_server_configure_extra: ""                 # e.g. "--enable-allow-freerdp-s
 # ---------------------------------------------------------------------------
 # Database (reference: INSTALL_MYSQL / MYSQL_* / GUAC_* / SECURE_MYSQL)
 # ---------------------------------------------------------------------------
-guac_install_mariadb: true                      # false => use a remote server
-guac_secure_mariadb: true
-guac_mysql_host: "localhost"
+guac_install_mariadb: true                      # true = install a local MariaDB
+                                                # false = use a separate/remote DB server (set guac_mysql_host)
+guac_secure_mariadb: true                       # apply mysql_secure_installation-equivalent (local only)
+guac_db_bootstrap: true                         # create the DB + user + import schema
+                                                # set false if a DBA manages the database for you
+guac_mysql_host: "localhost"                    # remote DB: set to the server's hostname/IP
 guac_mysql_port: 3306
 guac_db_name: "guacamole_db"
 guac_db_user: "guacamole_user"
 guac_db_password: "ChangeMe_GuacDB_2026"        # OVERRIDE in a vault for production
-guac_mysql_root_password: "ChangeMe_Root_2026"  # OVERRIDE in a vault for production
-guac_db_timezone: "UTC"
+guac_mysql_root_password: "ChangeMe_Root_2026"  # local root pw OR remote admin pw used for bootstrap
+guac_mysql_admin_user: "root"                   # admin account used to bootstrap a remote DB
+guac_db_timezone: "UTC"                          # "" to skip timezone configuration entirely
 
 # Database backup job (reference: backup-guacamole.sh + crontab)
 guac_db_backup_enabled: true

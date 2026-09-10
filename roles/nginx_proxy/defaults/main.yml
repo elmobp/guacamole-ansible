@@ -1,12 +1,6 @@
 ---
-nginx_proxy_packages:
-  - nginx
-
-nginx_proxy_le_packages:
-  - certbot
-  - python3-certbot-nginx
-
 # Upstream Guacamole context served by Tomcat
 guac_proxy_upstream: "http://127.0.0.1:8080/guacamole/"
 guac_proxy_client_max_body_size: "1024m"
-guac_proxy_ssl_protocols: "TLSv1.2 TLSv1.3"
+# TLS 1.3 only, everywhere (HRD-04)
+guac_proxy_ssl_protocols: "TLSv1.3"

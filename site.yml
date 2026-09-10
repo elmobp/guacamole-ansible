@@ -13,15 +13,17 @@
   gather_facts: true
 
   pre_tasks:
-    - name: Assert RHEL family
+    - name: Assert supported platform
       ansible.builtin.assert:
         that:
-          - ansible_os_family == "RedHat"
-          - ansible_distribution_major_version | int in [9, 10]
+          - >-
+            (ansible_os_family == "RedHat" and ansible_distribution_major_version | int in [9, 10])
+            or
+            (ansible_os_family == "Debian")
         fail_msg: >-
-          This playbook targets RHEL 9/10 family hosts
-          (detected {{ ansible_distribution }} {{ ansible_distribution_major_version }}).
-        success_msg: "{{ ansible_distribution }} {{ ansible_distribution_major_version }} OK"
+          Supported platforms: RHEL/Oracle/Rocky/Alma 9-10, Debian 12-13, Ubuntu 22.04/24.04
+          (detected {{ ansible_distribution }} {{ ansible_distribution_version }}).
+        success_msg: "{{ ansible_distribution }} {{ ansible_distribution_version }} ({{ ansible_os_family }}) OK"
 
   roles:
     - role: common

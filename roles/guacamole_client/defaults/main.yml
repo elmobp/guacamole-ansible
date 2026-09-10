@@ -1,11 +1,5 @@
 ---
-# RHEL 9 ships Java 17; RHEL 10 ships Java 21+ (no 17). Tomcat 9 supports both.
-guac_java_package_by_major:
-  "9": java-17-openjdk-headless
-  "10": java-21-openjdk-headless
-guac_client_java_packages:
-  - "{{ guac_java_package_by_major[ansible_distribution_major_version] | default('java-21-openjdk-headless') }}"
-
+# Java package is OS-family specific — see vars/RedHat.yml and vars/Debian.yml.
 guac_tomcat_user: "tomcat"
 guac_tomcat_group: "tomcat"
 guac_tomcat_versioned_dir: "/opt/apache-tomcat-{{ guac_tomcat_version }}"

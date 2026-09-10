@@ -1,6 +1,9 @@
 ---
+- name: Load OS-family variables
+  ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
+
 - name: Install Java
-  ansible.builtin.dnf:
+  ansible.builtin.package:
     name: "{{ guac_client_java_packages }}"
     state: present
 
@@ -21,7 +24,7 @@
     name: "{{ guac_tomcat_user }}"
     group: "{{ guac_tomcat_group }}"
     system: true
-    shell: /sbin/nologin
+    shell: /usr/sbin/nologin
     home: "{{ guac_tomcat_home }}"
     create_home: false
 
@@ -68,7 +71,7 @@
   ansible.builtin.file:
     path: "{{ guac_tomcat_home }}/webapps/{{ item }}"
     state: absent
-  loop: [docs, examples, host-manager, manager]
+  loop: [docs, examples, host-manager, manager, ROOT]
 
 - name: Deploy Tomcat systemd unit
   ansible.builtin.template:
@@ -77,11 +80,12 @@
     owner: root
     group: root
     mode: "0644"
+  when: not (guac_container_build | bool)
   notify:
     - Reload systemd
     - Restart tomcat
 
-# --- Guacamole web app + extensions ---------------------------------------
+# --- Guacamole web app --------------------------------------------------
 - name: Download guacamole.war
   block:
     - name: Fetch war (primary mirror)
@@ -91,6 +95,7 @@
         owner: root
         group: "{{ guac_tomcat_group }}"
         mode: "0664"
+      register: _war_fetch
   rescue:
     - name: Fetch war (archive.apache.org fallback)
       ansible.builtin.get_url:
@@ -99,6 +104,17 @@
         owner: root
         group: "{{ guac_tomcat_group }}"
         mode: "0664"
+      register: _war_fetch
+
+- name: Clear stale exploded webapp + work cache (on war change / upgrade)
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ guac_tomcat_home }}/webapps/guacamole"
+    - "{{ guac_tomcat_home }}/work/Catalina/localhost/guacamole"
+  when: _war_fetch is changed
+  notify: Restart tomcat
 
 - name: Link guacamole.war into Tomcat webapps
   ansible.builtin.file:
@@ -108,6 +124,22 @@
     owner: "{{ guac_tomcat_user }}"
     group: "{{ guac_tomcat_group }}"
     force: true
+  notify: Restart tomcat
+
+- name: Find installed JDBC MySQL auth extensions
+  ansible.builtin.find:
+    paths: "{{ guac_extensions_dir }}"
+    patterns: "guacamole-auth-jdbc-mysql-*.jar"
+  register: _jdbc_jars
+
+- name: Remove stale-version JDBC MySQL auth extensions
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ _jdbc_jars.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: item.path | basename != 'guacamole-auth-jdbc-mysql-' ~ guac_version ~ '.jar'
   notify: Restart tomcat
 
 - name: Install JDBC MySQL auth extension
@@ -129,7 +161,18 @@
     mode: "0640"
   notify: Restart tomcat
 
-- name: Tomcat URL redirect ( / -> /guacamole ) when no reverse proxy
+- name: Tomcat root redirect ( / -> /guacamole ) when no reverse proxy
+  ansible.builtin.file:
+    path: "{{ guac_tomcat_home }}/webapps/ROOT"
+    state: directory
+    owner: "{{ guac_tomcat_user }}"
+    group: "{{ guac_tomcat_group }}"
+    mode: "0755"
+  when:
+    - guac_url_redirect | bool
+    - not (guac_install_nginx | bool)
+
+- name: Tomcat root redirect JSP
   ansible.builtin.copy:
     dest: "{{ guac_tomcat_home }}/webapps/ROOT/index.jsp"
     content: "<% response.sendRedirect(\"/guacamole\"); %>\n"
@@ -141,21 +184,24 @@
     - not (guac_install_nginx | bool)
   notify: Restart tomcat
 
-- name: Flush handlers (Tomcat up before proxy/extensions)
-  ansible.builtin.meta: flush_handlers
+- name: Finalize Tomcat service
+  when: not (guac_container_build | bool)
+  block:
+    - name: Flush handlers (Tomcat up before proxy/extensions)
+      ansible.builtin.meta: flush_handlers
 
-- name: Ensure Tomcat enabled and running
-  ansible.builtin.service:
-    name: tomcat
-    state: started
-    enabled: true
+    - name: Ensure Tomcat enabled and running
+      ansible.builtin.service:
+        name: tomcat
+        state: started
+        enabled: true
 
-- name: Wait for Guacamole web app
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:8080/guacamole/"
-    status_code: [200]
-    return_content: false
-  register: _guac_web
-  until: _guac_web.status == 200
-  retries: 30
-  delay: 5
+    - name: Wait for Guacamole web app
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:8080/guacamole/"
+        status_code: [200]
+        timeout: 15
+      register: _guac_web
+      until: _guac_web.status == 200
+      retries: 40
+      delay: 5
