@@ -6,11 +6,19 @@
   ansible.builtin.package:
     name: "{{ guacd_build_toolchain }}"
     state: present
+  register: _pkg_tc
+  until: _pkg_tc is succeeded
+  retries: 3
+  delay: 20
 
 - name: Install guacd required build libraries
   ansible.builtin.package:
     name: "{{ guacd_build_libs }}"
     state: present
+  register: _pkg_libs
+  until: _pkg_libs is succeeded
+  retries: 3
+  delay: 20
 
 - name: Install guacd optional build libraries (best effort)
   ansible.builtin.package:

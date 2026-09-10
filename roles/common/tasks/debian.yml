@@ -1,13 +1,32 @@
 ---
+- name: Make apt resilient on slow / flaky links
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/80-guac-retries
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Acquire::Retries "5";
+      Acquire::http::Timeout "30";
+      Acquire::https::Timeout "30";
+
 - name: Refresh apt cache
   ansible.builtin.apt:
     update_cache: true
     cache_valid_time: 3600
+  register: _apt_update
+  until: _apt_update is succeeded
+  retries: 5
+  delay: 15
 
 - name: Install base packages
   ansible.builtin.apt:
     name: "{{ common_base_packages }}"
     state: present
+  register: _apt_base
+  until: _apt_base is succeeded
+  retries: 3
+  delay: 20
 
 - name: Manage firewall with ufw
   when:
