@@ -37,12 +37,21 @@ ensure_systemd_image() {
   case "$base" in
     oraclelinux:*) echo "$base"; return ;;
   esac
+  local DEB_MIRROR="${DEB_MIRROR:-http://kartolo.sby.datautama.net.id/debian}"
+  local UBU_MIRROR="${UBU_MIRROR:-http://ports.ubuntu.com/ubuntu-ports}"
+  local mirror_cmd=":"
+  case "$base" in
+    debian:*)  mirror_cmd="C=\$(. /etc/os-release; echo \$VERSION_CODENAME); rm -f /etc/apt/sources.list.d/debian.sources; printf 'deb ${DEB_MIRROR} %s main\ndeb ${DEB_MIRROR} %s-updates main\ndeb http://security.debian.org/debian-security %s-security main\n' \$C \$C \$C > /etc/apt/sources.list" ;;
+    ubuntu:*)  mirror_cmd="C=\$(. /etc/os-release; echo \$VERSION_CODENAME); rm -f /etc/apt/sources.list.d/ubuntu.sources; printf 'deb ${UBU_MIRROR} %s main universe\ndeb ${UBU_MIRROR} %s-updates main universe\ndeb ${UBU_MIRROR} %s-security main universe\n' \$C \$C \$C > /etc/apt/sources.list" ;;
+  esac
   if ! podman image exists "$img"; then
     echo ">>> building systemd base image for $tag" >&2
     podman build -q -t "$img" -f - . >&2 <<EOF
 FROM ${base}
 ENV container=podman DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN ${mirror_cmd} \
+ && echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80-guac-retries \
+ && apt-get update && apt-get install -y --no-install-recommends \
       systemd systemd-sysv dbus dbus-user-session sudo python3 iproute2 procps ca-certificates \
  && apt-get clean && rm -rf /var/lib/apt/lists/* \
  && find /etc/systemd/system /lib/systemd/system \
