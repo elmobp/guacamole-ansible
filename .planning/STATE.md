@@ -1,3 +1,11 @@
+---
+gsd_state_version: "1.0"
+status: unknown
+stopped_at: context exhaustion at 75% (2026-09-10)
+last_updated: "2026-09-10T20:59:34.599Z"
+state_head: dfa771e9624fb26be372239e49120d2544538aa6
+---
+
 # Project State
 
 ## Project Reference
@@ -63,3 +71,9 @@ Phase 15/16/17, OR (with a decision) Phase 18, OR (with creds) Phase 19/20.
 
 ---
 *Last updated: 2026-09-10 (pause after phases 10–14)*
+
+## Session
+
+**Last session:** 2026-09-10T20:59:34.580Z
+**Stopped at:** context exhaustion at 75% (2026-09-10)
+**Resume file:** None
