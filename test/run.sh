@@ -184,6 +184,19 @@ EOF
   [[ "$KEEP" == "1" ]] || podman rm -f "$ctr" >/dev/null
 }
 
-for t in "${TAGS[@]}"; do run_one "$t"; done
+FAILED_TAGS=()
+for t in "${TAGS[@]}"; do
+  if ! run_one "$t"; then
+    echo ">>> $t :: FAIL"
+    FAILED_TAGS+=("$t")
+    [[ "$KEEP" == "1" ]] || podman rm -f "guac-test-${t}" >/dev/null 2>&1 || true
+  fi
+done
 echo
-echo "ALL TARGETS PASSED: ${TAGS[*]}"
+if [[ ${#FAILED_TAGS[@]} -eq 0 ]]; then
+  echo "ALL TARGETS PASSED: ${TAGS[*]}"
+else
+  echo "FAILED TARGETS: ${FAILED_TAGS[*]}"
+  echo "PASSED TARGETS: $(comm -23 <(printf '%s\n' "${TAGS[@]}" | sort) <(printf '%s\n' "${FAILED_TAGS[@]}" | sort) | tr '\n' ' ')"
+  exit 1
+fi
