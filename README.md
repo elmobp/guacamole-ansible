@@ -4,6 +4,13 @@ An Ansible-native reimplementation of
 [itiligent/Easy-Guacamole-Installer](https://github.com/itiligent/Easy-Guacamole-Installer).
 No numbered shell scripts — everything is an idempotent role.
 
+## Documentation
+
+- **[docs/INSTALL.md](docs/INSTALL.md)** — step-by-step install, assumes no Ansible knowledge
+- **[docs/CONFIGURE.md](docs/CONFIGURE.md)** — every variable explained in plain English
+- **[docs/SCENARIOS.md](docs/SCENARIOS.md)** — copy-paste configs (separate DB, MFA, LDAP, RDP/SSH targets, prod TLS, FIPS, ...)
+- **[docs/OPERATIONS.md](docs/OPERATIONS.md)** — upgrades, backup/restore/DR runbook, hardening, containers
+
 **Supported platforms**
 
 | Family | Releases |

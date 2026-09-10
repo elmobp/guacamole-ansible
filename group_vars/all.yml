@@ -1,8 +1,11 @@
 ---
 # =============================================================================
-# Ansible Guacamole Installer (RHEL edition) — master configuration
-# Every value below maps to a setting from the original Easy-Guacamole-Installer
-# shell scripts. Override in inventory group_vars/host_vars or with -e.
+# Ansible Guacamole — master configuration
+#
+# Supported: RHEL/Oracle/Rocky/Alma 9-10, Debian 12-13, Ubuntu 22.04/24.04.
+# Override any value in host_vars/<host>.yml, another group_vars file, or with -e.
+# Full plain-English reference: docs/CONFIGURE.md
+# Copy-paste examples for common setups: docs/SCENARIOS.md
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -174,6 +177,17 @@ guac_fips_enabled: false                         # opt-in; needs a reboot, can l
 # ---------------------------------------------------------------------------
 guac_backup_enabled: true
 guac_backup_gpg_passphrase: ""                   # non-empty => AES-256 encrypt bundles
+guac_backup_schedule_oncalendar: "*-*-* 00:30:00"  # systemd OnCalendar for guac-backup.timer
+
+# ---------------------------------------------------------------------------
+# Declarative connections / groups / users  (see docs/CONFIGURE.md + SCENARIOS.md)
+# Define your backend RDP/VNC/SSH target servers here (usually in host_vars).
+# Empty by default — the connections role is a no-op until you add entries.
+# ---------------------------------------------------------------------------
+guac_connection_groups: []
+guac_connections: []
+guac_users: []
+guac_connections_prune: false                    # true => delete connections/users NOT listed above
 
 # ---------------------------------------------------------------------------
 # Default admin (created by the JDBC schema) — for post-install verification
