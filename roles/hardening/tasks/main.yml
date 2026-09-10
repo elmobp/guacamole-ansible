@@ -43,7 +43,7 @@
         group: root
         mode: "0644"
         content: |
-          # {{ ansible_managed }}
+          # Managed by Ansible (ansible-guacamole)
           {% for m in guac_hardening_blacklist_modules_l1 + (guac_hardening_blacklist_modules_l2 if guac_hardening_level == 'l2' else []) %}
           install {{ m }} /bin/false
           blacklist {{ m }}

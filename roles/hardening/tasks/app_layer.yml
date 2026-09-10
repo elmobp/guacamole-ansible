@@ -67,7 +67,7 @@
         group: root
         mode: "0644"
         content: |
-          # {{ ansible_managed }}
+          # Managed by Ansible (ansible-guacamole)
           [server]
           bind_host = {{ guac_guacd_bind_host }}
           bind_port = {{ guac_guacd_bind_port }}
