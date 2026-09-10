@@ -87,8 +87,16 @@ run_one() {
     else
       export DEBIAN_FRONTEND=noninteractive
       apt-get update >/dev/null
-      apt-get install -y --no-install-recommends ansible >/dev/null 2>&1 || \
-        { apt-get install -y --no-install-recommends ansible-core >/dev/null; NEED_GALAXY=1; }
+      apt-get install -y --no-install-recommends ansible python3-pymysql >/dev/null 2>&1 || \
+        { apt-get install -y --no-install-recommends ansible-core python3-pymysql >/dev/null; NEED_GALAXY=1; }
+      # Old distro ansible (Ubuntu 22.04 ships core 2.12) — upgrade the engine, keep bundled collections.
+      CORE=$(ansible --version 2>/dev/null | sed -n "s/^ansible \[core \([0-9.]*\).*/\1/p")
+      if [ -n "$CORE" ] && [ "$(printf "%s\n2.15\n" "$CORE" | sort -V | head -1)" != "2.15" ]; then
+        apt-get install -y --no-install-recommends pipx python3-venv >/dev/null 2>&1 || true
+        python3 -m pip install --break-system-packages -q "ansible-core>=2.15,<2.18" >/dev/null 2>&1 \
+          || pipx install "ansible-core>=2.15" >/dev/null 2>&1 || true
+        NEED_GALAXY=1
+      fi
     fi
     mkdir -p /root/guac && cp -a /opt/guac-ansible/. /root/guac/
     if [ -n "${NEED_GALAXY:-}" ]; then cd /root/guac && ansible-galaxy collection install -r requirements.yml >/dev/null; fi
