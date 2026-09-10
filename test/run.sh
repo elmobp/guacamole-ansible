@@ -117,6 +117,15 @@ EOF
       " ;;
   esac
 
+  # Optional: restore a previously-compiled guacd tree so this run skips the ~5 min compile.
+  #   GUAC_PREBUILT_DIR=/path   (contains <tag>.tar  produced by an earlier green run)
+  local PREBUILT="${GUAC_PREBUILT_DIR:-}"
+  if [[ -n "$PREBUILT" && -f "$PREBUILT/${tag}.tar" ]]; then
+    echo ">>> $tag :: restoring cached guacd build"
+    podman cp "$PREBUILT/${tag}.tar" "$ctr:/tmp/guac-prebuilt.tar"
+    podman exec "$ctr" bash -lc 'tar -C / -xf /tmp/guac-prebuilt.tar && ldconfig && rm -f /tmp/guac-prebuilt.tar'
+  fi
+
   # Bootstrap Ansible (control tooling only — not part of the product).
   podman exec "$ctr" bash -lc '
     set -e
@@ -159,6 +168,17 @@ EOF
 
   echo ">>> $tag :: functional checks"
   podman exec "$ctr" bash -lc 'cd /root/guac && bash test/check.sh'
+
+  # Export the compiled guacd tree for the next run's cache.
+  if [[ -n "$PREBUILT" ]]; then
+    mkdir -p "$PREBUILT"
+    podman exec "$ctr" bash -lc '
+      tar -cf /tmp/out.tar \
+        /usr/local/sbin/guacd /usr/local/.guacd_build_id \
+        /usr/local/lib/libguac* /usr/local/lib/freerdp2/*guac* 2>/dev/null || \
+      tar -cf /tmp/out.tar /usr/local/sbin/guacd /usr/local/.guacd_build_id /usr/local/lib/libguac*'
+    podman cp "$ctr:/tmp/out.tar" "$PREBUILT/${tag}.tar"
+  fi
 
   echo ">>> $tag :: PASS"
   [[ "$KEEP" == "1" ]] || podman rm -f "$ctr" >/dev/null
