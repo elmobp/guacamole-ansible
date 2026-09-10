@@ -166,4 +166,9 @@
         status_code: [200]
         return_content: true
       register: _proxy_auth
-      failed_when: "'authToken' not in _proxy_auth.content"
+      # A war redeploy (upgrade) can briefly serve the login page before the
+      # JDBC auth extension finishes loading — retry rather than fail the run.
+      until: _proxy_auth.status == 200 and 'authToken' in (_proxy_auth.content | default(''))
+      retries: 20
+      delay: 3
+      failed_when: "'authToken' not in (_proxy_auth.content | default(''))"
