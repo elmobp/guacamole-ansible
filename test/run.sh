@@ -188,6 +188,10 @@ EOF
   [[ "$KEEP" == "1" ]] || podman rm -f "$ctr" >/dev/null
 }
 
+# When sourced (test/dr.sh reuses base_image / ensure_systemd_image / run_one),
+# stop here — export the functions, don't run the matrix.
+(return 0 2>/dev/null) && return 0
+
 FAILED_TAGS=()
 for t in "${TAGS[@]}"; do
   if ! run_one "$t"; then
