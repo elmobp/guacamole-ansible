@@ -44,14 +44,14 @@ podman exec "$A" bash -lc '
     -d "{\"parentIdentifier\":\"ROOT\",\"name\":\"DR-TEST-CONN\",\"protocol\":\"ssh\",\"parameters\":{\"hostname\":\"1.2.3.4\",\"port\":\"22\"},\"attributes\":{}}" >/dev/null
   /usr/local/sbin/guac-backup --out /root/bundles
   ls -la /root/bundles'
-podman cp "$A:/root/bundles" "/tmp/guac-dr-bundles"
-BUNDLE=$(ls -1 /tmp/guac-dr-bundles/guac-backup-* | head -1)
-echo "bundle: $BUNDLE"
+BUNDLE=$(podman exec "$A" bash -lc 'ls -1t /root/bundles/guac-backup-*.tar.gz | head -1')
+echo "bundle (on host A): $BUNDLE"
 
 echo "== host B: provision then restore =="
 boot "$B"
 podman exec "$B" bash -lc 'cd /root/guac && ansible-playbook site.yml'
-podman cp "$BUNDLE" "$B:/root/restore-bundle.tar.gz"
+# Stream the bundle A -> B directly (avoids host /tmp symlink issues with `podman cp`).
+podman exec "$A" cat "$BUNDLE" | podman exec -i "$B" bash -c 'cat > /root/restore-bundle.tar.gz'
 podman exec "$B" bash -lc '/usr/local/sbin/guac-restore /root/restore-bundle.tar.gz'
 
 echo "== host B: verify restored data =="
