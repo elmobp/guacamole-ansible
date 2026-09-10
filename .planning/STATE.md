@@ -22,8 +22,9 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
 | Area | State |
 |---|---|
 | RHEL 9 / RHEL 10 | ✅ validated — fresh container, full `site.yml` (all 9 roles), idempotent `changed=0`, guacadmin login via HTTPS proxy |
-| Debian 12 | ✅ validated through the whole build; `/etc/modprobe.d` fix committed |
-| Debian 13 / Ubuntu 22.04 / 24.04 / 26.04 | ◆ code paths in place; container CI not yet run green |
+| Debian 12 | ✅ validated — full build, idempotent `changed=0`, checks green (deb3.log) |
+| Debian 13 | ✅ validated — full build, idempotent `changed=0`, checks green (deb4.log); needed FreeRDP-3.15 fix `a5c006c` (`guac_server_configure_cppflags`) |
+| Ubuntu 22.04 / 24.04 / 26.04 | ◆ running now (deb4.log) — 24.04/26.04 exercise the same FreeRDP 3.x path |
 | 9 roles (common, database, guacd, guacamole_client, nginx_proxy, guac_extensions, connections, backup, hardening) | ✅ implemented |
 | Docs: README + INSTALL/CONFIGURE/SCENARIOS/OPERATIONS/FIREWALL/LLD-RHEL-IRAP + architecture.drawio | ✅ |
 | container/ (Containerfile + compose + entrypoint) | ◆ implemented, image build not yet smoke-tested |
@@ -38,6 +39,7 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
 | 12 RDP session load balancing (BALANCING groups) | ✅ code | 5814ceb |
 | 13 LDAP-group RBAC (`guac_user_groups` + ldap-group props) | ✅ code | 45a3953 |
 | 14 external log forwarding over TLS / RELP+TLS | ✅ code | a66489d |
+| — FreeRDP 3.15 build fix (Debian 13 / Ubuntu 24.04+) | ✅ validated | a5c006c |
 | 15 full CIS L2 coverage | ○ planned (vendor ansible-lockdown CIS + OpenSCAP gate) |
 | 16 deep ISM alignment + LLD rewrite | ○ planned |
 | 17 operator manual → PDF | ○ planned |

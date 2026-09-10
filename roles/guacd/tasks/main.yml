@@ -139,6 +139,7 @@
         cmd: make install
         chdir: "{{ _guacd_src_dir }}"
       changed_when: true
+      notify: Restart guacd
 
     - name: Refresh linker cache
       ansible.builtin.command: ldconfig
@@ -151,7 +152,6 @@
         owner: root
         group: root
         mode: "0644"
-  notify: Restart guacd
 
 - name: Deploy guacd.conf
   ansible.builtin.template:
