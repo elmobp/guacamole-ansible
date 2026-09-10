@@ -1,7 +1,8 @@
-# Requirements: Ansible Guacamole Installer (RHEL edition)
+# Requirements: Ansible Guacamole
 
-**Defined:** 2026-09-10
-**Core Value:** `ansible-playbook site.yml` against a fresh RHEL 9/10 host yields a working Guacamole login over HTTPS reverse proxy.
+**Defined:** 2026-09-10 · **Updated:** 2026-09-10 (multi-distro, hardening, BCP/DR, connections, CI)
+**Core Value:** `ansible-playbook site.yml` against a fresh supported host yields a working Guacamole login over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is idempotent.
+**Supported platforms:** RHEL/Oracle/Rocky/Alma 9-10 · Debian 12-13 · Ubuntu 22.04/24.04/26.04
 
 ## v1 Requirements
 
@@ -89,6 +90,16 @@
 - [ ] **DEB-03**: guacd build deps, Tomcat, MariaDB, Nginx all resolve on Debian family
 - [ ] **DEB-04**: RHEL 9/10 continues to pass unchanged after the refactor
 - [ ] **DEB-05**: `test/run.sh` matrix covers ol9, ol10, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2604
+- [ ] **DEB-06**: Ubuntu 26.04 (LTS) supported — FreeRDP dev pkg resolved at runtime (freerdp3-dev → freerdp2-dev), codename-driven apt sources, `default-jre-headless`
+- [ ] **DEB-07**: Optional `guac_apt_mirror` / `guac_apt_security_mirror` to point apt at a faster regional mirror
+
+### Continuous Integration
+
+- [ ] **CI-01**: `.github/workflows/ci.yml` runs on push/PR: lint + syntax + a build matrix
+- [ ] **CI-02**: `lint` job — `yamllint`, `ansible-playbook --syntax-check`, `ansible-lint`, `shellcheck` on `test/*.sh`
+- [ ] **CI-03**: `build` job — matrix over all 7 platform tags, each running `test/run.sh <tag>` (full `site.yml` → idempotence → `check.sh`) in a systemd Podman container on the GitHub runner
+- [ ] **CI-04**: CI uses the default distro mirrors (GitHub runners are well-connected); the regional-mirror override is test-env only
+- [ ] **CI-05**: A `ci-ok` gate job fails the workflow if any matrix leg fails
 
 ### Container Image
 
@@ -145,31 +156,31 @@
 
 | Feature | Reason |
 |---------|--------|
-| Debian/Ubuntu/Raspbian | Reference repo already covers these; this project is the RHEL counterpart |
+| Raspbian / non-LTS Ubuntu / other distros | Not in the supported matrix |
 | Live Let's Encrypt in tests | No public DNS/inbound 80 in Podman; self-signed mimics it, production uses the LE toggle |
 | LDAP/AD login testing | No directory server available; role configures but login verification is DB-only |
 | Enterprise tiered MySQL cluster split | Not needed for a single jump-host |
 | Windows/Linux client cert import automation | Manual step in reference; documented, not automated |
-| Pushing to GitHub / upstream PR | User: local repo only |
+| Application-control / execution allow-listing (fapolicyd) | Out of hardening scope; documented in the LLD as a POA&M item |
+| Central log **analysis** / SIEM correlation | Build emits telemetry + optional forwarding; analysis is a SOC function |
 
-## Traceability
+## Status (2026-09-10)
 
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| REPO-01..05 | Phase 1 | Pending |
-| PLAT-01..05 | Phase 1 | Pending |
-| DB-01..05 | Phase 2 | Pending |
-| GUACD-01..04 | Phase 2 | Pending |
-| CLIENT-01..05 | Phase 3 | Pending |
-| PROXY-01..06 | Phase 4 | Pending |
-| EXT-01..06 | Phase 5 | Pending |
-| TEST-01..04 | Phase 6 | Pending |
+| Group | State |
+|---|---|
+| REPO / PLAT / DB / GUACD / CLIENT / PROXY / EXT / TEST-01..04 | ✅ validated on RHEL 9 + 10 (fresh container, idempotent, guacadmin login via proxy) |
+| UPG-01..05 (upgrades) | ◆ implemented; `test/upgrade.sh` written, full run pending |
+| DEB-01..07 (Debian/Ubuntu incl. 26.04) | ◆ implemented; Debian 12 validated through full build; 13 / Ubuntu 22.04/24.04/26.04 CI pending |
+| IMG-01..05 (container) | ◆ implemented; image build smoke test pending |
+| BDR-01..05 (backup/restore) | ◆ implemented; backup+restore smoke OK on RHEL; `test/dr.sh` A→B pending |
+| HRD-01..06 + chrony/syslog/auto-patch | ✅ implemented + idempotent on RHEL; TLS 1.3 only enforced |
+| CONN-01..05 (declarative connections) | ✅ implemented + idempotent on RHEL |
+| DOC-01..05 + FIREWALL + LLD-RHEL-IRAP + architecture.drawio | ✅ written |
+| CI-01..05 (GitHub Actions) | ✅ `.github/workflows/ci.yml` added — runs on first push to GitHub |
 
-**Coverage:**
-- v1 requirements: 40 total
-- Mapped to phases: 40
-- Unmapped: 0 ✓
+*Note:* DOC-05's "fully-commented template" is satisfied by `group_vars/all.yml` itself (every
+key carries an inline comment); no separate `.example` file.
 
 ---
 *Requirements defined: 2026-09-10*
-*Last updated: 2026-09-10 after initial definition*
+*Last updated: 2026-09-10 — cross-platform + hardening + BCP/DR + connections + CI*

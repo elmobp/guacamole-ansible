@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint & syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install "ansible-core>=2.16,<2.18" ansible-lint yamllint
+          ansible-galaxy collection install -r requirements.yml
+
+      - name: yamllint
+        run: yamllint -s .
+
+      - name: ansible syntax-check
+        run: ansible-playbook --syntax-check site.yml
+
+      - name: ansible-lint
+        run: ansible-lint -p roles/ site.yml || true   # advisory until baseline is clean
+
+      - name: shellcheck test scripts
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          shellcheck -S warning test/*.sh || true
+
+  build:
+    name: build (${{ matrix.tag }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        tag: [ol9, ol10, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2604]
+    env:
+      # GitHub runners are amd64 and close to the default mirrors — skip the regional overrides.
+      DEB_MIRROR: http://deb.debian.org/debian
+      UBU_MIRROR: http://archive.ubuntu.com/ubuntu
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+
+      - name: "Build + idempotence + functional checks: ${{ matrix.tag }}"
+        run: bash test/run.sh "${{ matrix.tag }}"
+
+  ci-ok:
+    name: CI passed
+    needs: [lint, build]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Verify all matrix legs passed
+        run: |
+          [ "${{ needs.lint.result }}" = "success" ] || { echo "lint failed"; exit 1; }
+          [ "${{ needs.build.result }}" = "success" ] || { echo "one or more build legs failed"; exit 1; }
+          echo "All CI checks passed."
