@@ -20,6 +20,12 @@
     state: absent
   notify: Reload nginx
 
+- name: Ensure Nginx enabled and running
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true
+
 # --- Tomcat RemoteIpValve (real client IPs behind the proxy) --------------
 - name: Configure Tomcat RemoteIpValve
   ansible.builtin.blockinfile:
@@ -89,12 +95,6 @@
 - name: Flush handlers (nginx/tomcat before verification)
   ansible.builtin.meta: flush_handlers
 
-- name: Ensure Nginx enabled and running
-  ansible.builtin.service:
-    name: nginx
-    state: started
-    enabled: true
-
 # --- Let's Encrypt (production only, disabled by default) ---------------
 - name: Let's Encrypt provisioning
   when: guac_tls_mode == "letsencrypt"
@@ -120,10 +120,11 @@
       notify: Reload nginx
 
 # --- Verification -----------------------------------------------------
-- name: Verify HTTPS login page via proxy
+- name: Verify HTTPS login page via proxy (proxy root serves Guacamole)
   ansible.builtin.uri:
-    url: "https://127.0.0.1/guacamole/"
+    url: "https://127.0.0.1/"
     validate_certs: false
+    timeout: 10
     headers:
       Host: "{{ guac_proxy_site }}"
     status_code: [200]
@@ -131,4 +132,20 @@
   until: _proxy_check.status == 200
   retries: 20
   delay: 3
+  when: guac_tls_mode == "self-signed"
+
+- name: Verify guacadmin can authenticate through the proxy
+  ansible.builtin.uri:
+    url: "https://127.0.0.1/api/tokens"
+    method: POST
+    validate_certs: false
+    timeout: 10
+    body_format: form-urlencoded
+    body:
+      username: "{{ guac_default_admin_user }}"
+      password: "{{ guac_default_admin_password }}"
+    status_code: [200]
+    return_content: true
+  register: _proxy_auth
+  failed_when: "'authToken' not in _proxy_auth.content"
   when: guac_tls_mode == "self-signed"

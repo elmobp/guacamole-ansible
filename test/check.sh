@@ -17,14 +17,14 @@ echo "== direct web app =="
 code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/guacamole/ || true)
 [[ "$code" == "200" ]] && ok "tomcat /guacamole/ -> 200" || bad "tomcat /guacamole/ -> $code"
 
-echo "== reverse proxy =="
+echo "== reverse proxy (root path serves Guacamole) =="
 rc=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1/ || true)
 [[ "$rc" == "301" ]] && ok "http:// -> 301 redirect" || bad "http:// -> $rc (expected 301)"
-hc=$(curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1/guacamole/ || true)
-[[ "$hc" == "200" ]] && ok "https:// /guacamole/ -> 200" || bad "https:// /guacamole/ -> $hc"
+hc=$(curl -sk -o /dev/null -w '%{http_code}' https://127.0.0.1/ || true)
+[[ "$hc" == "200" ]] && ok "https:// -> 200 login page" || bad "https:// -> $hc"
 
 echo "== guacadmin auth (through HTTPS proxy) =="
-tok=$(curl -sk -d 'username=guacadmin&password=guacadmin' https://127.0.0.1/guacamole/api/tokens || true)
+tok=$(curl -sk -d 'username=guacadmin&password=guacadmin' https://127.0.0.1/api/tokens || true)
 if echo "$tok" | grep -q '"authToken"'; then ok "guacadmin obtained an auth token"; else bad "guacadmin auth failed: $tok"; fi
 
 echo "== extensions present =="

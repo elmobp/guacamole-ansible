@@ -4,6 +4,13 @@
     name: "{{ guac_client_java_packages }}"
     state: present
 
+- name: Locate JAVA_HOME
+  ansible.builtin.shell:
+    cmd: 'set -o pipefail; dirname "$(dirname "$(readlink -f "$(command -v java)")")"'
+    executable: /bin/bash
+  register: _java_home
+  changed_when: false
+
 - name: Create tomcat group
   ansible.builtin.group:
     name: "{{ guac_tomcat_group }}"
