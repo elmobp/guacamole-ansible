@@ -4,7 +4,13 @@
 # guac_connection_groups:
 #   - name: "Production"
 #     parent: "ROOT"          # parent group name, or ROOT
-#     type: "ORGANIZATIONAL"  # ORGANIZATIONAL | BALANCING
+#     type: "ORGANIZATIONAL"  # ORGANIZATIONAL (folder) | BALANCING (load-balanced pool)
+#   - name: "RDP-farm"        # load balancing: put N identical rdp connections in here;
+#     parent: "Production"    # Guacamole picks the least-loaded member per session
+#     type: "BALANCING"
+#     session_affinity: true  # keep a user pinned to one member for the session
+#     max_connections: "50"
+#     max_connections_per_user: "1"
 #
 # guac_connections:
 #   - name: "web01 (RDP)"

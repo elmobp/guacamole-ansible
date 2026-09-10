@@ -215,3 +215,23 @@ guac_backup_retention_days: 60
 
 Ship `/var/backups/guacamole/*.gpg` off the host with your normal file-transfer tooling. See
 OPERATIONS.md for the restore procedure.
+
+## 12. Load-balanced RDP pool
+
+```yaml
+guac_connection_groups:
+  - { name: "Prod", parent: "ROOT", type: "ORGANIZATIONAL" }
+  - name: "TS-farm"
+    parent: "Prod"
+    type: "BALANCING"          # Guacamole routes each session to the least-loaded member
+    session_affinity: true     # pin a user to one member for the life of the session
+    max_connections_per_user: "1"
+
+guac_connections:
+  - { name: "ts01", parent: "TS-farm", protocol: rdp, parameters: { hostname: "10.0.5.11", port: "3389", security: "nla", "ignore-cert": "true" } }
+  - { name: "ts02", parent: "TS-farm", protocol: rdp, parameters: { hostname: "10.0.5.12", port: "3389", security: "nla", "ignore-cert": "true" } }
+  - { name: "ts03", parent: "TS-farm", protocol: rdp, parameters: { hostname: "10.0.5.13", port: "3389", security: "nla", "ignore-cert": "true" } }
+```
+
+Grant users access to the **group** (`groups: ["TS-farm"]` in `guac_users`) — they connect to
+the pool, not individual hosts.

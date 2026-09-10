@@ -57,17 +57,23 @@ class Guac:
         t.setdefault("identifier", "ROOT")
         return t
 
-    def create_group(self, parent_id, name, gtype):
-        return self.req("POST", "/session/data/%s/connectionGroups" % self.ds, body={
-            "parentIdentifier": parent_id, "name": name, "type": gtype,
-            "attributes": {"max-connections": "", "max-connections-per-user": "",
-                           "enable-session-affinity": ""}})
+    @staticmethod
+    def _group_attrs(grp):
+        return {
+            "max-connections": str(grp.get("max_connections", "")),
+            "max-connections-per-user": str(grp.get("max_connections_per_user", "")),
+            "enable-session-affinity": "true" if grp.get("session_affinity") else "",
+        }
 
-    def update_group(self, gid, parent_id, name, gtype):
+    def create_group(self, parent_id, grp):
+        return self.req("POST", "/session/data/%s/connectionGroups" % self.ds, body={
+            "parentIdentifier": parent_id, "name": grp["name"],
+            "type": grp.get("type", "ORGANIZATIONAL"), "attributes": self._group_attrs(grp)})
+
+    def update_group(self, gid, parent_id, grp):
         self.req("PUT", "/session/data/%s/connectionGroups/%s" % (self.ds, gid), body={
-            "identifier": gid, "parentIdentifier": parent_id, "name": name, "type": gtype,
-            "attributes": {"max-connections": "", "max-connections-per-user": "",
-                           "enable-session-affinity": ""}})
+            "identifier": gid, "parentIdentifier": parent_id, "name": grp["name"],
+            "type": grp.get("type", "ORGANIZATIONAL"), "attributes": self._group_attrs(grp)})
 
     # --- connections ------------------------------------------------
     def connections(self):
@@ -163,17 +169,17 @@ def run(module):
                 continue
             if name not in name_to_gid:
                 if not module.check_mode:
-                    res = g.create_group(name_to_gid[parent], name, gtype)
+                    res = g.create_group(name_to_gid[parent], grp)
                     name_to_gid[name] = res["identifier"]
                 else:
                     name_to_gid[name] = "__pending__"
                 changed = True
-                actions.append("create group %s" % name)
+                actions.append("create %s group %s" % (gtype.lower(), name))
             else:
                 cur = existing_groups.get(name)
                 if cur and (cur["parent"] != parent or cur["type"] != gtype):
                     if not module.check_mode:
-                        g.update_group(name_to_gid[name], name_to_gid[parent], name, gtype)
+                        g.update_group(name_to_gid[name], name_to_gid[parent], grp)
                     changed = True
                     actions.append("update group %s" % name)
 
