@@ -1,0 +1,58 @@
+# Guacamole appliance image, built from the same Ansible roles as a bare-metal host.
+#   podman build -t guacamole-appliance:local -f container/Containerfile .
+#
+# Runs guacd + Tomcat (+ optional nginx) in one container; expects an external
+# MariaDB/MySQL (see container/docker-compose.yml).
+ARG BASE_IMAGE=oraclelinux:9
+FROM ${BASE_IMAGE} AS build
+
+ENV GUAC_CONTAINER_BUILD=1
+COPY . /src
+WORKDIR /src
+
+RUN set -eux; \
+    if command -v dnf >/dev/null; then \
+      dnf -y install "oracle-epel-release-el$(rpm -E %rhel)" || \
+        dnf -y install "https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm"; \
+      dnf -y install ansible || { dnf -y install ansible-core; ansible-galaxy collection install -r requirements.yml; }; \
+    else \
+      export DEBIAN_FRONTEND=noninteractive; apt-get update; \
+      apt-get install -y --no-install-recommends ansible || \
+        { apt-get install -y --no-install-recommends ansible-core; ansible-galaxy collection install -r requirements.yml; }; \
+    fi; \
+    ansible-playbook -i 'localhost,' -c local site.yml \
+      -e guac_container_build=true \
+      -e guac_install_mariadb=false \
+      -e guac_install_nginx=false \
+      -e guac_db_bootstrap=false \
+      -e guac_manage_firewall=false \
+      -e guac_manage_selinux=false \
+      -e guac_hardening_enabled=true \
+      -e guac_backup_enabled=false ; \
+    # Stage the DB schema for first-run bootstrap by the entrypoint
+    mkdir -p /opt/guac-schema; \
+    cat /usr/local/src/guacamole/guacamole-auth-jdbc-*/mysql/schema/*.sql > /opt/guac-schema/schema.sql; \
+    # Slim: drop build toolchain + ansible + source
+    if command -v dnf >/dev/null; then \
+      dnf -y remove ansible ansible-core gcc gcc-c++ make autoconf automake libtool || true; \
+      dnf -y install mariadb curl; dnf clean all; \
+    else \
+      apt-get -y purge ansible ansible-core build-essential autoconf automake libtool || true; \
+      apt-get -y install --no-install-recommends mariadb-client curl; \
+      apt-get -y autoremove; rm -rf /var/lib/apt/lists/*; \
+    fi; \
+    rm -rf /src /usr/local/src/guacamole/*.tar.gz /root/.ansible
+
+COPY container/entrypoint.sh /usr/local/bin/guac-entrypoint
+RUN chmod +x /usr/local/bin/guac-entrypoint
+
+EXPOSE 8080
+ENV GUACAMOLE_HOME=/etc/guacamole \
+    CATALINA_HOME=/opt/tomcat \
+    GUACD_BIND_HOST=127.0.0.1 \
+    GUACD_BIND_PORT=4822
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
+  CMD curl -fsS http://127.0.0.1:8080/guacamole/ >/dev/null || exit 1
+
+ENTRYPOINT ["/usr/local/bin/guac-entrypoint"]

@@ -157,6 +157,25 @@ guac_duo:
   application_key: ""
 
 # ---------------------------------------------------------------------------
+# guacd daemon-side TLS (internal webapp <-> guacd link) — TLS 1.3
+# ---------------------------------------------------------------------------
+guac_guacd_tls_enabled: false                   # true => wrap guacd traffic in TLS
+
+# ---------------------------------------------------------------------------
+# Hardening (CIS-aligned) — see roles/hardening/defaults/main.yml for detail
+# ---------------------------------------------------------------------------
+guac_hardening_enabled: true
+guac_hardening_level: "l2"                       # l1 | l2
+guac_hardening_ssh_password_auth: true           # false = key-only SSH
+guac_fips_enabled: false                         # opt-in; needs a reboot, can lock you out
+
+# ---------------------------------------------------------------------------
+# Backup / BCP-DR — see roles/backup/defaults/main.yml
+# ---------------------------------------------------------------------------
+guac_backup_enabled: true
+guac_backup_gpg_passphrase: ""                   # non-empty => AES-256 encrypt bundles
+
+# ---------------------------------------------------------------------------
 # Default admin (created by the JDBC schema) — for post-install verification
 # ---------------------------------------------------------------------------
 guac_default_admin_user: "guacadmin"

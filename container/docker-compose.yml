@@ -1,0 +1,44 @@
+# Guacamole appliance + MariaDB.
+#   podman-compose -f container/docker-compose.yml up -d      (or: docker compose)
+#
+# Build the image first:
+#   podman build -t guacamole-appliance:local -f container/Containerfile .
+#
+# Then browse http://localhost:8080/guacamole/  (guacadmin / guacadmin — change it!)
+services:
+  db:
+    image: docker.io/library/mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${GUAC_DB_ROOT_PASSWORD:-ChangeMe_Root_2026}
+      MARIADB_DATABASE: ${GUAC_DB_NAME:-guacamole_db}
+      MARIADB_USER: ${GUAC_DB_USER:-guacamole_user}
+      MARIADB_PASSWORD: ${GUAC_DB_PASSWORD:-ChangeMe_GuacDB_2026}
+    volumes:
+      - guac-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  guacamole:
+    image: localhost/guacamole-appliance:local
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GUAC_DB_HOST: db
+      GUAC_DB_PORT: "3306"
+      GUAC_DB_NAME: ${GUAC_DB_NAME:-guacamole_db}
+      GUAC_DB_USER: ${GUAC_DB_USER:-guacamole_user}
+      GUAC_DB_PASSWORD: ${GUAC_DB_PASSWORD:-ChangeMe_GuacDB_2026}
+      # Needed only for the one-time schema import:
+      GUAC_DB_ADMIN_USER: root
+      GUAC_DB_ADMIN_PASSWORD: ${GUAC_DB_ROOT_PASSWORD:-ChangeMe_Root_2026}
+    ports:
+      - "8080:8080"
+
+volumes:
+  guac-db:

@@ -1,0 +1,17 @@
+---
+guac_hardening_enabled: true
+guac_hardening_level: "l2"          # l1 | l2  (l2 adds stricter, more intrusive controls)
+
+# Keep password SSH auth working by default (set false for key-only hosts).
+guac_hardening_ssh_password_auth: true
+guac_hardening_ssh_permit_root: "no"
+
+# Kernel module blacklist (CIS filesystem + removable media controls)
+guac_hardening_blacklist_modules_l1: [cramfs, freevxfs, jffs2, hfs, hfsplus, squashfs, udf]
+guac_hardening_blacklist_modules_l2: [usb-storage]
+
+guac_hardening_install_auditd: true
+
+# FIPS: opt-in only. Enabling requires a reboot and can lock you out if the
+# platform is not prepared. Ubuntu needs Ubuntu Pro (`pro enable fips-updates`).
+guac_fips_enabled: false

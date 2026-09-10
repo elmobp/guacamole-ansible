@@ -1,0 +1,23 @@
+# {{ ansible_managed }}  — CIS-aligned SSH hardening
+PermitRootLogin {{ guac_hardening_ssh_permit_root }}
+PermitEmptyPasswords no
+{% if not guac_hardening_ssh_password_auth %}
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+{% endif %}
+MaxAuthTries 4
+LoginGraceTime 60
+ClientAliveInterval 300
+ClientAliveCountMax 2
+X11Forwarding no
+{% if guac_hardening_level == 'l2' %}
+AllowTcpForwarding no
+AllowAgentForwarding no
+{% endif %}
+IgnoreRhosts yes
+HostbasedAuthentication no
+MaxSessions 4
+Ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com,aes128-gcm@openssh.com
+KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
+Banner /etc/issue.net

@@ -1,0 +1,172 @@
+---
+- name: Hardening (CIS-aligned)
+  when: guac_hardening_enabled | bool
+  block:
+    # --- Kernel / sysctl -------------------------------------------------
+    - name: Apply sysctl hardening
+      ansible.posix.sysctl:
+        name: "{{ item.k }}"
+        value: "{{ item.v }}"
+        sysctl_file: /etc/sysctl.d/90-guac-hardening.conf
+        state: present
+        reload: "{{ not (guac_container_build | bool) }}"
+      loop:
+        - { k: net.ipv4.conf.all.rp_filter, v: "1" }
+        - { k: net.ipv4.conf.default.rp_filter, v: "1" }
+        - { k: net.ipv4.conf.all.accept_redirects, v: "0" }
+        - { k: net.ipv4.conf.default.accept_redirects, v: "0" }
+        - { k: net.ipv4.conf.all.secure_redirects, v: "0" }
+        - { k: net.ipv4.conf.all.send_redirects, v: "0" }
+        - { k: net.ipv4.conf.default.send_redirects, v: "0" }
+        - { k: net.ipv4.conf.all.accept_source_route, v: "0" }
+        - { k: net.ipv4.conf.default.accept_source_route, v: "0" }
+        - { k: net.ipv4.conf.all.log_martians, v: "1" }
+        - { k: net.ipv4.icmp_echo_ignore_broadcasts, v: "1" }
+        - { k: net.ipv4.icmp_ignore_bogus_error_responses, v: "1" }
+        - { k: net.ipv4.tcp_syncookies, v: "1" }
+        - { k: net.ipv6.conf.all.accept_redirects, v: "0" }
+        - { k: net.ipv6.conf.all.accept_source_route, v: "0" }
+        - { k: kernel.randomize_va_space, v: "2" }
+        - { k: kernel.kptr_restrict, v: "2" }
+        - { k: kernel.dmesg_restrict, v: "1" }
+        - { k: kernel.yama.ptrace_scope, v: "1" }
+        - { k: fs.suid_dumpable, v: "0" }
+        - { k: fs.protected_hardlinks, v: "1" }
+        - { k: fs.protected_symlinks, v: "1" }
+      failed_when: false
+
+    # --- Kernel module blacklist --------------------------------------
+    - name: Blacklist unnecessary kernel modules
+      ansible.builtin.copy:
+        dest: /etc/modprobe.d/90-guac-hardening.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # {{ ansible_managed }}
+          {% for m in guac_hardening_blacklist_modules_l1 + (guac_hardening_blacklist_modules_l2 if guac_hardening_level == 'l2' else []) %}
+          install {{ m }} /bin/false
+          blacklist {{ m }}
+          {% endfor %}
+
+    # --- Core dumps ----------------------------------------------------
+    - name: Disable core dumps via limits
+      ansible.builtin.copy:
+        dest: /etc/security/limits.d/90-guac-nocore.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: "*  hard  core  0\n"
+
+    - name: Disable systemd-coredump storage
+      ansible.builtin.copy:
+        dest: /etc/systemd/coredump.conf.d/90-guac.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: "[Coredump]\nStorage=none\nProcessSizeMax=0\n"
+
+    # --- login.defs / umask ------------------------------------------
+    - name: Password ageing + umask in login.defs
+      ansible.builtin.lineinfile:
+        path: /etc/login.defs
+        regexp: '^{{ item.k }}\s'
+        line: "{{ item.k }}\t{{ item.v }}"
+      loop:
+        - { k: PASS_MAX_DAYS, v: "365" }
+        - { k: PASS_MIN_DAYS, v: "1" }
+        - { k: PASS_WARN_AGE, v: "7" }
+        - { k: UMASK, v: "027" }
+      failed_when: false
+
+    # --- SSH hardening (drop-in) ------------------------------------
+    - name: Ensure sshd_config.d include dir
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Deploy SSH hardening drop-in
+      ansible.builtin.template:
+        src: sshd-hardening.conf.j2
+        dest: /etc/ssh/sshd_config.d/50-guac-hardening.conf
+        owner: root
+        group: root
+        mode: "0600"
+        validate: "sshd -t -f %s"
+      failed_when: false
+      notify: Restart sshd
+
+    # --- Sensitive file permissions --------------------------------
+    - name: Lock down sensitive files
+      ansible.builtin.file:
+        path: "{{ item.p }}"
+        owner: root
+        group: "{{ item.g | default('root') }}"
+        mode: "{{ item.m }}"
+      loop:
+        - { p: /etc/passwd, m: "0644" }
+        - { p: /etc/group, m: "0644" }
+        - { p: /etc/shadow, m: "0000", g: "{{ 'shadow' if ansible_os_family == 'Debian' else 'root' }}" }
+        - { p: /etc/gshadow, m: "0000", g: "{{ 'shadow' if ansible_os_family == 'Debian' else 'root' }}" }
+        - { p: /etc/ssh/sshd_config, m: "0600" }
+        - { p: /etc/crontab, m: "0600" }
+      failed_when: false
+
+    - name: Restrict cron/at to root
+      ansible.builtin.copy:
+        dest: "{{ item }}"
+        content: ""
+        owner: root
+        group: root
+        mode: "0600"
+        force: false
+      loop:
+        - /etc/cron.allow
+        - /etc/at.allow
+
+    # --- auditd -----------------------------------------------------
+    - name: Install auditd
+      ansible.builtin.package:
+        name: "{{ 'audit' if ansible_os_family == 'RedHat' else 'auditd' }}"
+        state: present
+      when: guac_hardening_install_auditd | bool
+
+    - name: Deploy baseline audit rules
+      ansible.builtin.template:
+        src: guac-hardening.rules.j2
+        dest: /etc/audit/rules.d/90-guac-hardening.rules
+        owner: root
+        group: root
+        mode: "0600"
+      when: guac_hardening_install_auditd | bool
+      notify: Restart auditd
+
+    - name: Enable auditd
+      ansible.builtin.service:
+        name: auditd
+        state: started
+        enabled: true
+      when:
+        - guac_hardening_install_auditd | bool
+        - not (guac_container_build | bool)
+      failed_when: false
+
+    # --- misc ----------------------------------------------------
+    - name: Mask ctrl-alt-del reboot
+      ansible.builtin.systemd:
+        name: ctrl-alt-del.target
+        masked: true
+      when: not (guac_container_build | bool)
+      failed_when: false
+
+    # --- FIPS (opt-in) -----------------------------------------
+    - name: Enable FIPS mode
+      ansible.builtin.include_tasks: fips.yml
+      when: guac_fips_enabled | bool
+
+- name: App-layer hardening
+  ansible.builtin.include_tasks: app_layer.yml
+  when: guac_hardening_enabled | bool

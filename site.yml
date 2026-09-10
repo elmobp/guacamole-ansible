@@ -39,8 +39,42 @@
       tags: [proxy]
     - role: guac_extensions
       tags: [extensions]
+    - role: backup
+      tags: [backup]
+    - role: hardening
+      tags: [hardening]
 
   post_tasks:
+    - name: Flush handlers
+      ansible.builtin.meta: flush_handlers
+
+    - name: Final smoke test — Guacamole web app
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:8080/guacamole/"
+        status_code: [200]
+        timeout: 15
+      register: _final_web
+      until: _final_web.status == 200
+      retries: 30
+      delay: 5
+      when: not (guac_container_build | bool)
+
+    - name: Final smoke test — guacadmin login{{ ' via proxy' if guac_install_nginx | bool else '' }}
+      ansible.builtin.uri:
+        url: "{{ 'https://127.0.0.1/api/tokens' if guac_install_nginx | bool else 'http://127.0.0.1:8080/guacamole/api/tokens' }}"
+        method: POST
+        validate_certs: false
+        timeout: 10
+        body_format: form-urlencoded
+        body:
+          username: "{{ guac_default_admin_user }}"
+          password: "{{ guac_default_admin_password }}"
+        return_content: true
+        status_code: [200]
+      register: _final_auth
+      failed_when: "'authToken' not in _final_auth.content"
+      when: not (guac_container_build | bool)
+
     - name: Report endpoints
       ansible.builtin.debug:
         msg:

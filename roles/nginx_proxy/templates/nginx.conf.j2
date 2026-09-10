@@ -28,8 +28,7 @@ http {
     # TLS 1.3 only (HRD-04)
     ssl_protocols {{ guac_proxy_ssl_protocols }};
     ssl_prefer_server_ciphers off;
-    ssl_session_cache shared:SSL:10m;
-    ssl_session_timeout 1h;
+    ssl_session_timeout 10m;
     ssl_session_tickets off;
 
     include /etc/nginx/conf.d/*.conf;

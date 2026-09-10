@@ -196,9 +196,4 @@
     group: root
     mode: "0644"
 
-# --- Backup job -------------------------------------------------------
-- name: Include backup job tasks
-  ansible.builtin.include_tasks: backup.yml
-  when:
-    - guac_db_backup_enabled | bool
-    - not (guac_container_build | bool)
+# Backup/restore is handled by the dedicated `backup` role (BCP/DR).

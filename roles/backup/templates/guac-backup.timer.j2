@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Scheduled Guacamole BCP/DR backup
+
+[Timer]
+OnCalendar={{ guac_backup_schedule_oncalendar }}
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Guacamole BCP/DR restore. Rebuilds a working Guacamole from a guac-backup bundle.
+#
+#   guac-restore /path/to/guac-backup-host-TS.tar.gz[.gpg]
+#
+# Prerequisites on the target host: the Ansible playbook has run (guacd, tomcat,
+# nginx, DB + guac DB/user all exist). This script overlays saved state and data.
+set -euo pipefail
+umask 077
+
+BUNDLE="${1:-}"
+[[ -f "${BUNDLE}" ]] || { echo "usage: guac-restore <bundle.tar.gz[.gpg]>" >&2; exit 2; }
+
+GUAC_HOME="{{ guac_home }}"
+DB_NAME="{{ guac_db_name }}"
+GPG_PASS='{{ guac_backup_gpg_passphrase }}'
+{% if guac_install_mariadb | bool %}
+DB_ADMIN=(--socket={{ guac_mariadb_socket }} -u root)
+{% else %}
+DB_ADMIN=(-h {{ guac_mysql_host }} -P {{ guac_mysql_port }} -u {{ guac_mysql_admin_user }} -p'{{ guac_mysql_root_password }}')
+{% endif %}
+
+WORK="$(mktemp -d)"; trap 'rm -rf "${WORK}"' EXIT
+SRC="${BUNDLE}"
+
+if [[ "${SRC}" == *.gpg ]]; then
+  [[ -n "${GPG_PASS}" ]] || { echo "bundle is encrypted but no passphrase configured" >&2; exit 3; }
+  gpg --batch --yes --pinentry-mode loopback --passphrase "${GPG_PASS}" \
+      -o "${WORK}/bundle.tar.gz" -d "${SRC}"
+  SRC="${WORK}/bundle.tar.gz"
+fi
+
+if [[ -f "${BUNDLE%.gpg}.sha256" && "${SRC}" == "${BUNDLE}" ]]; then
+  echo "[guac-restore] verifying bundle checksum"
+  echo "$(cat "${BUNDLE}.sha256")  ${BUNDLE}" | sha256sum -c -
+fi
+
+tar -C "${WORK}" -xzf "${SRC}"
+DIR="$(find "${WORK}" -maxdepth 1 -type d -name 'guac-backup-*' | head -1)"
+[[ -d "${DIR}" ]] || { echo "malformed bundle" >&2; exit 4; }
+
+echo "[guac-restore] manifest:"; sed 's/^/    /' "${DIR}/MANIFEST"
+( cd "${DIR}" && sha256sum -c SHA256SUMS >/dev/null ) && echo "[guac-restore] payload checksums OK"
+
+echo "[guac-restore] stopping services"
+systemctl stop tomcat guacd 2>/dev/null || true
+
+TS="$(date -u +%Y%m%dT%H%M%SZ)"
+if [[ -d "${GUAC_HOME}" ]]; then
+  mv "${GUAC_HOME}" "${GUAC_HOME}.pre-restore-${TS}"
+fi
+mkdir -p "$(dirname "${GUAC_HOME}")"
+tar -C "$(dirname "${GUAC_HOME}")" -xzf "${DIR}/guacamole-home.tar.gz"
+
+echo "[guac-restore] restoring database ${DB_NAME}"
+mysql "${DB_ADMIN[@]}" -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\`"
+mysql "${DB_ADMIN[@]}" "${DB_NAME}" < "${DIR}/database.sql"
+
+if [[ -f "${DIR}/nginx.tar.gz" ]]; then
+  echo "[guac-restore] restoring nginx TLS + site config"
+  tar -C / -xzf "${DIR}/nginx.tar.gz"
+  systemctl reload nginx 2>/dev/null || systemctl restart nginx 2>/dev/null || true
+fi
+
+echo "[guac-restore] starting services"
+systemctl start guacd tomcat
+
+echo "[guac-restore] waiting for Guacamole"
+for _ in $(seq 1 60); do
+  code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/guacamole/ || true)"
+  [[ "${code}" == "200" ]] && { echo "[guac-restore] OK — Guacamole is serving"; exit 0; }
+  sleep 2
+done
+echo "[guac-restore] WARNING: Guacamole did not return 200 within timeout; check logs" >&2
+exit 1

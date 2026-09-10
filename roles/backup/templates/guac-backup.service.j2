@@ -1,0 +1,10 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Guacamole BCP/DR backup
+After=mariadb.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/guac-backup
+Nice=10
+IOSchedulingClass=idle

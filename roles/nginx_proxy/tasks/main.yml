@@ -15,6 +15,66 @@
     group: root
     mode: "0755"
 
+- name: Remove stock default sites
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/nginx/conf.d/default.conf
+    - /etc/nginx/sites-enabled/default
+  notify: Reload nginx
+
+# --- TLS material (self-signed) --------------------------------------------
+- name: Provision self-signed TLS material
+  when: guac_tls_mode == "self-signed"
+  block:
+    - name: Create TLS directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+      loop:
+        - "{{ guac_ssl_cert_dir }}"
+        - "{{ guac_ssl_key_dir }}"
+
+    - name: Render self-signed cert OpenSSL config
+      ansible.builtin.template:
+        src: cert_attributes.cnf.j2
+        dest: "{{ guac_build_dir }}/cert_attributes.cnf"
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Generate self-signed TLS certificate (mimics a signed cert)
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -x509 -nodes -newkey rsa:{{ guac_cert_rsa_keylength }}
+          -keyout {{ guac_ssl_key_dir }}/{{ guac_proxy_site }}.key
+          -out {{ guac_ssl_cert_dir }}/{{ guac_proxy_site }}.crt
+          -days {{ guac_cert_days }}
+          -config {{ guac_build_dir }}/cert_attributes.cnf
+        creates: "{{ guac_ssl_cert_dir }}/{{ guac_proxy_site }}.crt"
+      notify: Reload nginx
+
+    - name: Set key permissions
+      ansible.builtin.file:
+        path: "{{ guac_ssl_key_dir }}/{{ guac_proxy_site }}.key"
+        owner: root
+        group: root
+        mode: "0640"
+
+# --- Site + main config (site first so nginx -t on nginx.conf sees it) ------
+- name: Deploy Guacamole reverse-proxy site
+  ansible.builtin.template:
+    src: "guacamole-site-{{ 'tls' if guac_tls_mode == 'self-signed' else 'http' }}.conf.j2"
+    dest: /etc/nginx/conf.d/guacamole.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload nginx
+
 - name: Deploy nginx.conf
   ansible.builtin.template:
     src: nginx.conf.j2
@@ -23,15 +83,6 @@
     group: root
     mode: "0644"
     validate: "nginx -t -c %s"
-  notify: Reload nginx
-
-- name: Remove stock default sites
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: absent
-  loop:
-    - /etc/nginx/conf.d/default.conf
-    - /etc/nginx/sites-enabled/default
   notify: Reload nginx
 
 - name: Ensure Nginx enabled and running
@@ -54,58 +105,6 @@
                    remoteIpProxiesHeader="x-forwarded-by"
                    protocolHeader="x-forwarded-proto" />
   notify: Restart tomcat
-
-# --- TLS material -------------------------------------------------------
-- name: Create TLS directories
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0750"
-  loop:
-    - "{{ guac_ssl_cert_dir }}"
-    - "{{ guac_ssl_key_dir }}"
-  when: guac_tls_mode == "self-signed"
-
-- name: Render self-signed cert OpenSSL config
-  ansible.builtin.template:
-    src: cert_attributes.cnf.j2
-    dest: "{{ guac_build_dir }}/cert_attributes.cnf"
-    owner: root
-    group: root
-    mode: "0600"
-  when: guac_tls_mode == "self-signed"
-
-- name: Generate self-signed TLS certificate (mimics a signed cert)
-  ansible.builtin.command:
-    cmd: >-
-      openssl req -x509 -nodes -newkey rsa:{{ guac_cert_rsa_keylength }}
-      -keyout {{ guac_ssl_key_dir }}/{{ guac_proxy_site }}.key
-      -out {{ guac_ssl_cert_dir }}/{{ guac_proxy_site }}.crt
-      -days {{ guac_cert_days }}
-      -config {{ guac_build_dir }}/cert_attributes.cnf
-    creates: "{{ guac_ssl_cert_dir }}/{{ guac_proxy_site }}.crt"
-  when: guac_tls_mode == "self-signed"
-  notify: Reload nginx
-
-- name: Set key permissions
-  ansible.builtin.file:
-    path: "{{ guac_ssl_key_dir }}/{{ guac_proxy_site }}.key"
-    owner: root
-    group: root
-    mode: "0640"
-  when: guac_tls_mode == "self-signed"
-
-# --- Site config -------------------------------------------------------
-- name: Deploy Guacamole reverse-proxy site
-  ansible.builtin.template:
-    src: "guacamole-site-{{ 'tls' if guac_tls_mode == 'self-signed' else 'http' }}.conf.j2"
-    dest: /etc/nginx/conf.d/guacamole.conf
-    owner: root
-    group: root
-    mode: "0644"
-  notify: Reload nginx
 
 - name: Flush handlers (nginx/tomcat before verification)
   ansible.builtin.meta: flush_handlers

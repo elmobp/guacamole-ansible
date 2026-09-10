@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# {{ ansible_managed }}
+# Guacamole BCP/DR backup — produces a single restorable bundle.
+#   guac-backup [--out DIR]
+set -euo pipefail
+umask 077
+
+BACKUP_DIR="{{ guac_backup_dir }}"
+RETENTION="{{ guac_backup_retention_days }}"
+GUAC_HOME="{{ guac_home }}"
+DB_NAME="{{ guac_db_name }}"
+DB_USER="{{ guac_db_user }}"
+DB_PASS='{{ guac_db_password }}'
+{% if guac_install_mariadb | bool %}
+DB_ARGS=(--socket={{ guac_mariadb_socket }} -u "${DB_USER}" -p"${DB_PASS}")
+{% else %}
+DB_ARGS=(-h {{ guac_mysql_host }} -P {{ guac_mysql_port }} -u "${DB_USER}" -p"${DB_PASS}")
+{% endif %}
+GPG_PASS='{{ guac_backup_gpg_passphrase }}'
+INCLUDE_TLS="{{ 'yes' if guac_backup_include_tls | bool else 'no' }}"
+
+[[ "${1:-}" == "--out" && -n "${2:-}" ]] && BACKUP_DIR="$2"
+mkdir -p "${BACKUP_DIR}"
+
+TS="$(date -u +%Y%m%dT%H%M%SZ)"
+HOST="$(hostname -s)"
+STAGE="$(mktemp -d)"
+trap 'rm -rf "${STAGE}"' EXIT
+NAME="guac-backup-${HOST}-${TS}"
+ROOT="${STAGE}/${NAME}"
+mkdir -p "${ROOT}"
+
+echo "[guac-backup] dumping database ${DB_NAME}"
+mysqldump "${DB_ARGS[@]}" --single-transaction --no-tablespaces --routines --events \
+    --add-drop-table "${DB_NAME}" > "${ROOT}/database.sql"
+
+echo "[guac-backup] archiving ${GUAC_HOME}"
+tar -C "$(dirname "${GUAC_HOME}")" -czf "${ROOT}/guacamole-home.tar.gz" "$(basename "${GUAC_HOME}")"
+
+if [[ "${INCLUDE_TLS}" == "yes" && -d /etc/nginx ]]; then
+  echo "[guac-backup] archiving nginx TLS + site config"
+  tar -C / -czf "${ROOT}/nginx.tar.gz" \
+      $( [[ -d /etc/nginx/ssl ]] && echo etc/nginx/ssl ) \
+      $( [[ -f /etc/nginx/conf.d/guacamole.conf ]] && echo etc/nginx/conf.d/guacamole.conf ) \
+      2>/dev/null || true
+fi
+
+GUAC_VER="$(sed -n 's/.*guacamole-auth-jdbc-mysql-\(.*\)\.jar/\1/p' <(ls "${GUAC_HOME}/extensions" 2>/dev/null) | head -1)"
+cat > "${ROOT}/MANIFEST" <<EOF
+bundle=${NAME}
+created_utc=${TS}
+source_host=${HOST}
+os={{ ansible_distribution }} {{ ansible_distribution_version }}
+guacamole_version=${GUAC_VER:-unknown}
+tomcat_version={{ guac_tomcat_version }}
+db_name=${DB_NAME}
+db_mode={{ 'local' if guac_install_mariadb | bool else 'remote:' ~ guac_mysql_host }}
+includes_tls=${INCLUDE_TLS}
+EOF
+
+( cd "${ROOT}" && sha256sum ./* > SHA256SUMS )
+
+BUNDLE="${BACKUP_DIR}/${NAME}.tar.gz"
+tar -C "${STAGE}" -czf "${BUNDLE}" "${NAME}"
+sha256sum "${BUNDLE}" | awk '{print $1}' > "${BUNDLE}.sha256"
+
+if [[ -n "${GPG_PASS}" ]]; then
+  echo "[guac-backup] encrypting bundle"
+  gpg --batch --yes --pinentry-mode loopback --passphrase "${GPG_PASS}" \
+      -c --cipher-algo AES256 -o "${BUNDLE}.gpg" "${BUNDLE}"
+  rm -f "${BUNDLE}"
+  sha256sum "${BUNDLE}.gpg" | awk '{print $1}' > "${BUNDLE}.gpg.sha256"
+  BUNDLE="${BUNDLE}.gpg"
+fi
+
+echo "[guac-backup] pruning bundles older than ${RETENTION} days"
+find "${BACKUP_DIR}" -maxdepth 1 -type f -name 'guac-backup-*' -mtime "+${RETENTION}" -delete
+
+echo "[guac-backup] OK -> ${BUNDLE}"

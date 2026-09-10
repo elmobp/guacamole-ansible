@@ -1,0 +1,60 @@
+---
+- name: Load OS-family variables (for DB socket/service names)
+  ansible.builtin.include_vars:
+    file: "{{ role_path }}/../database/vars/{{ ansible_os_family }}.yml"
+
+- name: Create backup directory
+  ansible.builtin.file:
+    path: "{{ guac_backup_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Install gnupg when bundle encryption is requested
+  ansible.builtin.package:
+    name: "{{ 'gnupg2' if ansible_os_family == 'RedHat' else 'gnupg' }}"
+    state: present
+  when: guac_backup_gpg_passphrase | length > 0
+
+- name: Install guac-backup
+  ansible.builtin.template:
+    src: guac-backup.sh.j2
+    dest: /usr/local/sbin/guac-backup
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Install guac-restore
+  ansible.builtin.template:
+    src: guac-restore.sh.j2
+    dest: /usr/local/sbin/guac-restore
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Install backup systemd service + timer
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "/etc/systemd/system/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: guac-backup.service.j2, dest: guac-backup.service }
+    - { src: guac-backup.timer.j2, dest: guac-backup.timer }
+  when: not (guac_container_build | bool)
+  notify: Reload systemd (backup)
+
+- name: Enable backup timer
+  ansible.builtin.systemd:
+    name: guac-backup.timer
+    enabled: "{{ guac_backup_enabled | bool }}"
+    state: "{{ 'started' if guac_backup_enabled | bool else 'stopped' }}"
+    daemon_reload: true
+  when: not (guac_container_build | bool)
+
+- name: Remove legacy cron backup job (superseded by the timer)
+  ansible.builtin.cron:
+    name: "backup guacamole"
+    state: absent

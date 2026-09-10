@@ -1,0 +1,8 @@
+---
+guac_backup_enabled: true
+guac_backup_dir: "{{ guac_db_backup_dir | default('/var/backups/guacamole') }}"
+guac_backup_retention_days: "{{ guac_db_backup_retention_days | default(30) }}"
+guac_backup_schedule_oncalendar: "*-*-* 00:30:00"   # systemd OnCalendar
+guac_backup_include_tls: true                        # include /etc/nginx/ssl certs
+# Optional at-rest encryption of the bundle (age or gpg passphrase)
+guac_backup_gpg_passphrase: ""                       # non-empty => symmetric-encrypt bundles

@@ -1,0 +1,37 @@
+# {{ ansible_managed }}  — baseline auditd rules (CIS-aligned subset)
+-D
+-b 8192
+-f 1
+
+# Identity / auth
+-w /etc/passwd -p wa -k identity
+-w /etc/group -p wa -k identity
+-w /etc/shadow -p wa -k identity
+-w /etc/gshadow -p wa -k identity
+-w /etc/sudoers -p wa -k scope
+-w /etc/sudoers.d/ -p wa -k scope
+
+# Login / session
+-w /var/log/lastlog -p wa -k logins
+-w /var/run/faillock/ -p wa -k logins
+
+# Time
+-a always,exit -F arch=b64 -S adjtimex,settimeofday -k time-change
+-w /etc/localtime -p wa -k time-change
+
+# Network config
+-w /etc/hosts -p wa -k system-locale
+-w /etc/hostname -p wa -k system-locale
+
+# MAC / sshd / guacamole config
+-w /etc/selinux/ -p wa -k MAC-policy
+-w /etc/ssh/sshd_config -p wa -k sshd
+-w /etc/ssh/sshd_config.d/ -p wa -k sshd
+-w {{ guac_home }}/ -p wa -k guacamole-config
+
+# Privilege escalation
+-a always,exit -F arch=b64 -C euid!=uid -F auid!=unset -S execve -k privileged
+-w /usr/bin/sudo -p x -k priv-cmd
+
+# Module load/unload
+-a always,exit -F arch=b64 -S init_module,delete_module -k modules

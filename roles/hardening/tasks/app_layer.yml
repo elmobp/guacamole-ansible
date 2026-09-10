@@ -1,0 +1,85 @@
+---
+# --- Tomcat -----------------------------------------------------------
+- name: Disable Tomcat shutdown port
+  ansible.builtin.replace:
+    path: "{{ guac_tomcat_home }}/conf/server.xml"
+    regexp: '<Server port="8005" shutdown="SHUTDOWN">'
+    replace: '<Server port="-1" shutdown="SHUTDOWN">'
+  failed_when: false
+  notify: Restart tomcat
+
+- name: Restrict Tomcat conf/bin permissions
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: "{{ guac_tomcat_user }}"
+    group: "{{ guac_tomcat_group }}"
+    mode: "0750"
+    recurse: true
+  loop:
+    - "{{ guac_tomcat_home }}/conf"
+  failed_when: false
+
+- name: Harden Tomcat error responses (no version/stacktrace leak)
+  ansible.builtin.blockinfile:
+    path: "{{ guac_tomcat_home }}/conf/server.xml"
+    marker: "<!-- {mark} ANSIBLE guac hardening ErrorReportValve -->"
+    insertbefore: "</Host>"
+    block: |2
+            <Valve className="org.apache.catalina.valves.ErrorReportValve"
+                   showReport="false" showServerInfo="false" />
+  failed_when: false
+  notify: Restart tomcat
+
+# --- guacd daemon TLS (internal guacd <-> webapp) --------------------
+- name: Configure guacd daemon-side TLS (TLS 1.3)
+  when: guac_guacd_tls_enabled | default(false) | bool
+  block:
+    - name: Create guacd TLS dir
+      ansible.builtin.file:
+        path: "{{ guac_home }}/ssl"
+        state: directory
+        owner: "{{ guac_guacd_account }}"
+        group: "{{ guac_guacd_account }}"
+        mode: "0750"
+
+    - name: Generate guacd self-signed TLS cert
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -x509 -nodes -newkey rsa:2048 -days {{ guac_cert_days }}
+          -subj "/CN={{ guac_guacd_bind_host }}"
+          -keyout {{ guac_home }}/ssl/guacd.key -out {{ guac_home }}/ssl/guacd.crt
+        creates: "{{ guac_home }}/ssl/guacd.crt"
+
+    - name: Own guacd TLS material
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: "{{ guac_guacd_account }}"
+        group: "{{ guac_guacd_account }}"
+        mode: "0640"
+      loop:
+        - "{{ guac_home }}/ssl/guacd.key"
+        - "{{ guac_home }}/ssl/guacd.crt"
+
+    - name: Enable TLS in guacd.conf
+      ansible.builtin.copy:
+        dest: "{{ guac_home }}/guacd.conf"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # {{ ansible_managed }}
+          [server]
+          bind_host = {{ guac_guacd_bind_host }}
+          bind_port = {{ guac_guacd_bind_port }}
+
+          [ssl]
+          server_certificate = {{ guac_home }}/ssl/guacd.crt
+          server_key = {{ guac_home }}/ssl/guacd.key
+      notify: Restart guacd
+
+    - name: Point the webapp at guacd over TLS
+      ansible.builtin.lineinfile:
+        path: "{{ guac_home }}/guacamole.properties"
+        regexp: '^guacd-ssl:'
+        line: "guacd-ssl: true"
+      notify: Restart tomcat

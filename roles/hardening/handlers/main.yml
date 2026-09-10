@@ -1,0 +1,25 @@
+---
+- name: Restart sshd
+  ansible.builtin.service:
+    name: "{{ 'sshd' if ansible_os_family == 'RedHat' else 'ssh' }}"
+    state: restarted
+  when: not (guac_container_build | bool)
+  failed_when: false
+
+- name: Restart auditd
+  ansible.builtin.command: systemctl restart auditd
+  when: not (guac_container_build | bool)
+  changed_when: true
+  failed_when: false
+
+- name: Restart tomcat
+  ansible.builtin.service:
+    name: tomcat
+    state: restarted
+  when: not (guac_container_build | bool)
+
+- name: Restart guacd
+  ansible.builtin.service:
+    name: guacd
+    state: restarted
+  when: not (guac_container_build | bool)

@@ -1,0 +1,28 @@
+---
+# FIPS enablement is best-effort and requires a reboot to take effect.
+# It is never enabled by default (guac_fips_enabled).
+
+- name: Enable FIPS mode (RHEL family)
+  when: ansible_os_family == "RedHat"
+  block:
+    - name: Install crypto-policies FIPS tooling
+      ansible.builtin.dnf:
+        name: crypto-policies-scripts
+        state: present
+
+    - name: Run fips-mode-setup --enable
+      ansible.builtin.command: fips-mode-setup --enable
+      register: _fips
+      changed_when: "'FIPS mode will be enabled' in _fips.stdout or 'enabled' in _fips.stdout"
+      failed_when: false
+
+    - name: FIPS reboot notice
+      ansible.builtin.debug:
+        msg: "FIPS mode staged — a REBOOT is required for it to take effect. Verify with: fips-mode-setup --check"
+
+- name: FIPS on Debian/Ubuntu
+  when: ansible_os_family == "Debian"
+  ansible.builtin.debug:
+    msg: >-
+      FIPS on Ubuntu requires Ubuntu Pro: `pro enable fips-updates` then reboot.
+      Debian has no supported FIPS module. Skipping automated enablement.
