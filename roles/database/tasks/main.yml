@@ -34,7 +34,7 @@
 # --- Connection profile (local socket vs remote admin) --------------------
 - name: Build DB connection profile
   ansible.builtin.set_fact:
-    _db_conn: >-
+    _db_login: >-
       {{
         {'login_user': 'root', 'login_unix_socket': guac_mariadb_socket}
         if guac_install_mariadb else
@@ -134,13 +134,16 @@
   when:
     - guac_db_bootstrap | bool
     - not (guac_container_build | bool)
-  module_defaults:
-    group/community.mysql.all: "{{ _db_conn }}"
   block:
     - name: Create Guacamole database
       community.mysql.mysql_db:
         name: "{{ guac_db_name }}"
         state: present
+        login_user: "{{ _db_login.login_user }}"
+        login_password: "{{ _db_login.login_password | default(omit) }}"
+        login_host: "{{ _db_login.login_host | default(omit) }}"
+        login_port: "{{ _db_login.login_port | default(omit) }}"
+        login_unix_socket: "{{ _db_login.login_unix_socket | default(omit) }}"
 
     - name: Create Guacamole database user
       community.mysql.mysql_user:
@@ -149,12 +152,22 @@
         host: "{{ 'localhost' if guac_install_mariadb else '%' }}"
         priv: "{{ guac_db_name }}.*:SELECT,INSERT,UPDATE,DELETE"
         state: present
+        login_user: "{{ _db_login.login_user }}"
+        login_password: "{{ _db_login.login_password | default(omit) }}"
+        login_host: "{{ _db_login.login_host | default(omit) }}"
+        login_port: "{{ _db_login.login_port | default(omit) }}"
+        login_unix_socket: "{{ _db_login.login_unix_socket | default(omit) }}"
 
     - name: Check whether base schema is loaded
       community.mysql.mysql_query:
         query: >-
           SELECT COUNT(*) AS n FROM information_schema.tables
           WHERE table_schema = '{{ guac_db_name }}' AND table_name = 'guacamole_user'
+        login_user: "{{ _db_login.login_user }}"
+        login_password: "{{ _db_login.login_password | default(omit) }}"
+        login_host: "{{ _db_login.login_host | default(omit) }}"
+        login_port: "{{ _db_login.login_port | default(omit) }}"
+        login_unix_socket: "{{ _db_login.login_unix_socket | default(omit) }}"
       register: _schema_check
       changed_when: false
 
@@ -171,6 +184,11 @@
             name: "{{ guac_db_name }}"
             state: import
             target: "{{ guac_build_dir }}/guac-schema-{{ guac_version }}.sql"
+            login_user: "{{ _db_login.login_user }}"
+            login_password: "{{ _db_login.login_password | default(omit) }}"
+            login_host: "{{ _db_login.login_host | default(omit) }}"
+            login_port: "{{ _db_login.login_port | default(omit) }}"
+            login_unix_socket: "{{ _db_login.login_unix_socket | default(omit) }}"
 
     - name: Apply schema upgrades (existing database, version bump)
       when: (_schema_check.query_result[0][0].n | int) > 0

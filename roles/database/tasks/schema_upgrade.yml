@@ -45,4 +45,9 @@
         name: "{{ guac_db_name }}"
         state: import
         target: "{{ guac_build_dir }}/guacamole-auth-jdbc-{{ guac_version }}/mysql/schema/upgrade/upgrade-pre-{{ item }}.sql"
+        login_user: "{{ _db_login.login_user }}"
+        login_password: "{{ _db_login.login_password | default(omit) }}"
+        login_host: "{{ _db_login.login_host | default(omit) }}"
+        login_port: "{{ _db_login.login_port | default(omit) }}"
+        login_unix_socket: "{{ _db_login.login_unix_socket | default(omit) }}"
       loop: "{{ _upgrades_to_apply }}"
