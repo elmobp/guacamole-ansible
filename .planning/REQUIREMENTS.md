@@ -115,6 +115,22 @@
 - [ ] **HRD-05**: FIPS mode enabled where the platform supports it (`guac_fips_enabled`); documented limits (Ubuntu Pro, RHEL fips-mode-setup)
 - [ ] **HRD-06**: Hardening is idempotent and does not break the guacadmin login path; documented residual CIS gaps
 
+### Declarative connections & users
+
+- [ ] **CONN-01**: `guac_connections` list in host_vars declares backend target servers (RDP/VNC/SSH/telnet/kubernetes) with all parameters
+- [ ] **CONN-02**: `guac_connection_groups` list declares (nested) organisational groups
+- [ ] **CONN-03**: `guac_users` list declares Guacamole users, passwords, group membership, permissions
+- [ ] **CONN-04**: A `connections` role reconciles these into Guacamole idempotently (create/update; optional prune of unmanaged)
+- [ ] **CONN-05**: Works whether auth is DB-only or LDAP (DB connections still apply)
+
+### Documentation (non-coder friendly)
+
+- [ ] **DOC-01**: `docs/INSTALL.md` — install Ansible + get the repo + run, per OS, zero codebase knowledge assumed
+- [ ] **DOC-02**: `docs/CONFIGURE.md` — every single variable explained in plain English, grouped, with defaults
+- [ ] **DOC-03**: `docs/SCENARIOS.md` — copy-paste host_vars for common setups (separate DB, TOTP, LDAP, RDP targets, prod LE, FIPS)
+- [ ] **DOC-04**: `docs/OPERATIONS.md` — upgrades, backup/restore/DR runbook, hardening notes, container
+- [ ] **DOC-05**: README links to all of the above; `group_vars/all.yml.example` is a fully-commented template
+
 ## v2 Requirements
 
 ### Hardening & Ops

@@ -1,0 +1,39 @@
+---
+# Declarative Guacamole objects. Define these in host_vars.
+#
+# guac_connection_groups:
+#   - name: "Production"
+#     parent: "ROOT"          # parent group name, or ROOT
+#     type: "ORGANIZATIONAL"  # ORGANIZATIONAL | BALANCING
+#
+# guac_connections:
+#   - name: "web01 (RDP)"
+#     parent: "Production"          # group name or ROOT
+#     protocol: "rdp"              # rdp | vnc | ssh | telnet | kubernetes
+#     parameters:
+#       hostname: "10.0.0.11"
+#       port: "3389"
+#       security: "nla"
+#       ignore-cert: "true"
+#       username: "Administrator"
+#       password: "{{ vault_web01_pw }}"
+#     attributes:
+#       max-connections: "2"
+#       max-connections-per-user: "1"
+#
+# guac_users:
+#   - username: "alice"
+#     password: "{{ vault_alice_pw }}"
+#     attributes: { "guac-full-name": "Alice Smith" }
+#     system_permissions: []                 # e.g. [CREATE_CONNECTION, ADMINISTER]
+#     connections: ["web01 (RDP)"]           # READ permission on these connections
+#     groups: ["Production"]                 # READ permission on these groups
+
+guac_connections: []
+guac_connection_groups: []
+guac_users: []
+
+guac_connections_datasource: "mysql"
+guac_connections_api_base: "http://127.0.0.1:8080/guacamole/api"
+# Prune connections/groups/users NOT listed above (dangerous — off by default)
+guac_connections_prune: false

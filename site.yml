@@ -43,6 +43,8 @@
       tags: [backup]
     - role: hardening
       tags: [hardening]
+    - role: connections
+      tags: [connections]
 
   post_tasks:
     - name: Flush handlers

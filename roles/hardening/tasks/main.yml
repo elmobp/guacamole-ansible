@@ -164,9 +164,11 @@
 
     # --- misc ----------------------------------------------------
     - name: Mask ctrl-alt-del reboot
-      ansible.builtin.systemd:
-        name: ctrl-alt-del.target
-        masked: true
+      ansible.builtin.file:
+        src: /dev/null
+        dest: /etc/systemd/system/ctrl-alt-del.target
+        state: link
+        force: true
       when: not (guac_container_build | bool)
       failed_when: false
 

@@ -31,8 +31,9 @@ ROOT="${STAGE}/${NAME}"
 mkdir -p "${ROOT}"
 
 echo "[guac-backup] dumping database ${DB_NAME}"
-mysqldump "${DB_ARGS[@]}" --single-transaction --no-tablespaces --routines --events \
-    --add-drop-table "${DB_NAME}" > "${ROOT}/database.sql"
+# The guac DB user has DML only (no EVENT/ROUTINE/LOCK) — keep the dump minimal.
+mysqldump "${DB_ARGS[@]}" --single-transaction --no-tablespaces --skip-lock-tables \
+    --add-drop-table --skip-add-locks "${DB_NAME}" > "${ROOT}/database.sql"
 
 echo "[guac-backup] archiving ${GUAC_HOME}"
 tar -C "$(dirname "${GUAC_HOME}")" -czf "${ROOT}/guacamole-home.tar.gz" "$(basename "${GUAC_HOME}")"

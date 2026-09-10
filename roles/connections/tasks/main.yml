@@ -1,0 +1,33 @@
+---
+- name: Wait for the Guacamole API
+  ansible.builtin.uri:
+    url: "{{ guac_connections_api_base }}/languages"
+    status_code: [200]
+    timeout: 15
+  register: _api_ready
+  until: _api_ready.status == 200
+  retries: 24
+  delay: 5
+  when:
+    - not (guac_container_build | bool)
+    - (guac_connections | length) + (guac_connection_groups | length) + (guac_users | length) > 0
+
+- name: Reconcile Guacamole connections / groups / users
+  guacamole_reconcile:
+    base_url: "{{ guac_connections_api_base }}"
+    username: "{{ guac_default_admin_user }}"
+    password: "{{ guac_default_admin_password }}"
+    datasource: "{{ guac_connections_datasource }}"
+    connection_groups: "{{ guac_connection_groups }}"
+    connections: "{{ guac_connections }}"
+    users: "{{ guac_users }}"
+    prune: "{{ guac_connections_prune | bool }}"
+  register: _guac_recon
+  when:
+    - not (guac_container_build | bool)
+    - (guac_connections | length) + (guac_connection_groups | length) + (guac_users | length) > 0
+
+- name: Show reconciliation actions
+  ansible.builtin.debug:
+    var: _guac_recon.actions
+  when: _guac_recon.actions | default([]) | length > 0
