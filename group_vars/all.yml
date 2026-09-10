@@ -137,7 +137,7 @@ guac_ldap_enabled: false
 guac_quickconnect_enabled: false
 guac_histrec_enabled: false
 guac_histrec_path: "/var/lib/guacamole/recordings"
-guac_branding_enabled: true                      # dark-theme branding.jar
+guac_branding_enabled: false                     # dark-theme branding.jar
 
 # LDAP settings (reference: add-auth-ldap.sh) — templated, NOT login-tested here
 guac_ldap:
