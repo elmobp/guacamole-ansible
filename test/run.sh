@@ -9,13 +9,13 @@
 #   test/run.sh all                 # full matrix (explicit)
 #   KEEP=1 test/run.sh ol9          # leave the container running afterwards
 #
-# Matrix tags: ol9 ol10 debian12 debian13 ubuntu2204 ubuntu2404
+# Matrix tags: ol9 ol10 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2604
 # =============================================================================
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 KEEP="${KEEP:-0}"
-ALL_TAGS=(ol9 ol10 debian12 debian13 ubuntu2204 ubuntu2404)
+ALL_TAGS=(ol9 ol10 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2604)
 
 [[ $# -eq 0 || "${1:-}" == "all" ]] && TAGS=("${ALL_TAGS[@]}") || TAGS=("$@")
 
@@ -27,6 +27,7 @@ base_image() {
     debian13)   echo "debian:13" ;;
     ubuntu2204) echo "ubuntu:22.04" ;;
     ubuntu2404) echo "ubuntu:24.04" ;;
+    ubuntu2604) echo "ubuntu:26.04" ;;
     *) echo "" ;;
   esac
 }

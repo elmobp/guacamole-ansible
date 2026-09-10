@@ -80,7 +80,7 @@ extensions, and the two-distro test harness.
 4. Works on OL9 and OL10
 
 ### Phase 9: Debian / Ubuntu family support
-**Goal:** Same playbook runs on Debian 12/13 + Ubuntu 22.04/24.04; RHEL 9/10 unaffected.
+**Goal:** Same playbook runs on Debian 12/13 + Ubuntu 22.04/24.04/26.04; RHEL 9/10 unaffected.
 **Mode:** mvp
 **Requirements:** DEB-01, DEB-02, DEB-03, DEB-04, DEB-05
 **Success Criteria:**

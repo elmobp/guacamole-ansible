@@ -21,7 +21,7 @@
             or
             (ansible_os_family == "Debian")
         fail_msg: >-
-          Supported platforms: RHEL/Oracle/Rocky/Alma 9-10, Debian 12-13, Ubuntu 22.04/24.04
+          Supported platforms: RHEL/Oracle/Rocky/Alma 9-10, Debian 12-13, Ubuntu 22.04/24.04/26.04
           (detected {{ ansible_distribution }} {{ ansible_distribution_version }}).
         success_msg: "{{ ansible_distribution }} {{ ansible_distribution_version }} ({{ ansible_os_family }}) OK"
 

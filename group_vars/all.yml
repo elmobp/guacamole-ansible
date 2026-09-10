@@ -2,7 +2,7 @@
 # =============================================================================
 # Ansible Guacamole — master configuration
 #
-# Supported: RHEL/Oracle/Rocky/Alma 9-10, Debian 12-13, Ubuntu 22.04/24.04.
+# Supported: RHEL/Oracle/Rocky/Alma 9-10, Debian 12-13, Ubuntu 22.04/24.04/26.04.
 # Override any value in host_vars/<host>.yml, another group_vars file, or with -e.
 # Full plain-English reference: docs/CONFIGURE.md
 # Copy-paste examples for common setups: docs/SCENARIOS.md

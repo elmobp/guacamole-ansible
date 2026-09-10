@@ -8,7 +8,7 @@ Guacamole web client on Tomcat, a MariaDB/MySQL JDBC auth backend (local or a se
 server), an Nginx TLS-1.3 reverse proxy, toggle-driven auth/console extensions, declarative
 backend connections/users, CIS-aligned hardening, and BCP/DR backup/restore — entirely through
 idempotent Ansible roles instead of the original numbered bash scripts. Also ships a container
-image + compose stack. Platforms: RHEL/Oracle/Rocky/Alma 9-10, Debian 12-13, Ubuntu 22.04/24.04.
+image + compose stack. Platforms: RHEL/Oracle/Rocky/Alma 9-10, Debian 12-13, Ubuntu 22.04/24.04/26.04.
 
 ## Core Value
 

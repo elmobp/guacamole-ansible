@@ -84,11 +84,11 @@
 
 ### Debian / Ubuntu family
 
-- [ ] **DEB-01**: `site.yml` also runs on Debian 12/13 and Ubuntu 22.04/24.04 (`ansible_os_family == "Debian"`)
+- [ ] **DEB-01**: `site.yml` also runs on Debian 12/13 and Ubuntu 22.04/24.04/26.04 (`ansible_os_family == "Debian"`)
 - [ ] **DEB-02**: Package/repo/service logic branches by OS family (apt, ufw, no SELinux/EPEL) via role vars
 - [ ] **DEB-03**: guacd build deps, Tomcat, MariaDB, Nginx all resolve on Debian family
 - [ ] **DEB-04**: RHEL 9/10 continues to pass unchanged after the refactor
-- [ ] **DEB-05**: `test/run.sh` matrix covers ol9, ol10, debian12, debian13, ubuntu2204, ubuntu2404
+- [ ] **DEB-05**: `test/run.sh` matrix covers ol9, ol10, debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2604
 
 ### Container Image
 

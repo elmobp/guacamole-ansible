@@ -417,7 +417,7 @@ artefacts. Status legend:
 | `ism-1424` | ✅ Implemented | [§3.4 Web application & reverse proxy](#web) | nginx adds HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy and a Content-Security-Policy on every response. |
 | `ism-1446` | 🟡 Partial / conditional | [§7 Cryptography & TLS 1.3](#crypto) | TLS 1.3 negotiates X25519 / P-256 / P-384; under FIPS mode the FIPS 186 curves are used. |
 | `ism-1453` | ✅ Implemented | [§7 Cryptography & TLS 1.3](#crypto) | TLS 1.3 provides Perfect Forward Secrecy for every session by design. |
-| `ism-1501` | ✅ Implemented | [§5.1 Build & SOE](#os-build) | Only vendor-supported majors are permitted (RHEL/Oracle/Rocky/Alma 9-10, Debian 12-13, Ubuntu 22.04/24.04); the playbook asserts the platform. |
+| `ism-1501` | ✅ Implemented | [§5.1 Build & SOE](#os-build) | Only vendor-supported majors are permitted (RHEL/Oracle/Rocky/Alma 9-10, Debian 12-13, Ubuntu 22.04/24.04/26.04); the playbook asserts the platform. |
 | `ism-1504` | 🟡 Partial / conditional | [§6.2 Authentication](#auth) | For an internet-facing deployment, enable guac_totp_enabled or guac_duo_enabled so users MFA to the service. |
 | `ism-1505` | 🟡 Partial / conditional | [§6.2 Authentication](#auth) | MFA (TOTP/Duo) gates access to Guacamole, which brokers access to target data repositories. |
 | `ism-1511` | ✅ Implemented | [§10 Backup & recovery](#backup) | guac-backup bundles DB + /etc/guacamole + TLS to a single point-in-time archive; test/dr.sh restores it onto a fresh host and verifies login + data. |

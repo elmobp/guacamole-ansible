@@ -20,7 +20,7 @@ No numbered shell scripts — everything is an idempotent role.
 |--------|----------|
 | RHEL / Oracle / Rocky / Alma | 9, 10 |
 | Debian | 12, 13 |
-| Ubuntu | 22.04 LTS, 24.04 LTS |
+| Ubuntu | 22.04, 24.04, 26.04 LTS |
 
 It builds a Guacamole jump-host:
 
@@ -191,7 +191,7 @@ and bootstraps the schema into the compose MariaDB on first start.
 ## Testing (Podman — never runs Ansible on your workstation)
 
 ```bash
-test/run.sh                       # full matrix: ol9 ol10 debian12 debian13 ubuntu2204 ubuntu2404
+test/run.sh                       # full matrix: ol9 ol10 debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2604
 test/run.sh ol9 ubuntu2404        # a subset
 test/dr.sh ol9                    # backup/restore across two hosts
 test/upgrade.sh ol9 1.5.5 1.6.0   # upgrade path
