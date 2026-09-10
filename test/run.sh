@@ -151,8 +151,11 @@ EOF
     if [ -n "${NEED_GALAXY:-}" ]; then cd /root/guac && ansible-galaxy collection install -r requirements.yml >/dev/null; fi
   '
 
+  # NOTE: this function is invoked in a condition context (`if ! run_one`), which
+  # disables `set -e` for its whole body — so every critical step below carries an
+  # explicit `|| return 1`. Do not rely on errexit here.
   echo ">>> $tag :: playbook (run 1)"
-  podman exec "$ctr" bash -lc 'cd /root/guac && ansible-playbook site.yml'
+  podman exec "$ctr" bash -lc 'cd /root/guac && ansible-playbook site.yml' || return 1
 
   echo ">>> $tag :: idempotence (converge, then a fully clean run)"
   podman exec -e ANSIBLE_NOCOLOR=1 -e ANSIBLE_FORCE_COLOR=0 "$ctr" bash -lc '
@@ -162,12 +165,13 @@ EOF
       echo "$out" | grep -A1 "PLAY RECAP"
       echo "$out" | grep -Eq "failed=0" || { echo "PLAYBOOK FAILED ('"$tag"')"; exit 1; }
       echo "$out" | grep -Eq "changed=0[[:space:]].*failed=0" && exit 0
+      echo "$out" | grep -E "^(TASK |changed:)" | grep -B1 "^changed:" | sed "s/^/  non-idempotent> /"
     done
     echo "IDEMPOTENCE FAILED ('"$tag"')"; exit 1
-  '
+  ' || return 1
 
   echo ">>> $tag :: functional checks"
-  podman exec "$ctr" bash -lc 'cd /root/guac && bash test/check.sh'
+  podman exec "$ctr" bash -lc 'cd /root/guac && bash test/check.sh' || return 1
 
   # Export the compiled guacd tree for the next run's cache.
   if [[ -n "$PREBUILT" ]]; then
