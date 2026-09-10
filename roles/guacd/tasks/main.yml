@@ -71,14 +71,16 @@
       changed_when: true
 
     - name: Compile guacamole-server
-      community.general.make:
+      ansible.builtin.command:
+        cmd: "make -j{{ ansible_processor_vcpus | default(2) }}"
         chdir: "{{ guac_build_dir }}/guacamole-server-{{ guac_version }}"
-        jobs: "{{ ansible_processor_vcpus | default(2) }}"
+      changed_when: true
 
     - name: Install guacamole-server
-      community.general.make:
+      ansible.builtin.command:
+        cmd: make install
         chdir: "{{ guac_build_dir }}/guacamole-server-{{ guac_version }}"
-        target: install
+      changed_when: true
 
     - name: Refresh linker cache
       ansible.builtin.command: ldconfig
