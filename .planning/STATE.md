@@ -54,9 +54,13 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
 - Session fixes: FreeRDP 3.15 build (`a5c006c`), block-notify→task-notify (`1b85215`),
   run.sh failure propagation (`ea1f39b`) + source guard (`aeafb87`), chrony/26.04 idempotence (`b359f52`).
 - **`test/dr.sh ol9` PASSED** — backup host A → restore fresh host B → guacadmin login + marker
-  connection intact. Needed dr.sh fix `2a1d…` (stream bundle A→B; macOS `/tmp` is a symlink).
-- Still TODO: `test/upgrade.sh ol9 1.5.5 1.6.0` (running), `podman build` image smoke,
-  phase-11 source-ref smoke (`-e guac_source_ref=1.6.0` on ol9).
+  connection intact. Needed dr.sh fix `275b162` (stream bundle A→B; macOS `/tmp` is a symlink).
+- **`test/upgrade.sh` — real bug found & fixed (`3bff91c`):** war was downloaded to an unversioned
+  path, so `get_url` skipped it on a version bump → stale 1.5.5 war + 1.6.0 JDBC extension →
+  "not compatible" → all logins 403. War is now `guacamole-<ver>.war` + symlink + stale prune.
+  1.5.5→1.6.0 verified live: login OK, idempotent. Clean end-to-end re-run in progress.
+- Still TODO: `podman build` container image smoke, phase-11 source-ref smoke
+  (`-e guac_source_ref=1.6.0` on ol9).
 
 ```
 cd ~/Documents/Projects/claude
