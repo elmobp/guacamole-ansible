@@ -2,52 +2,64 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-09-10)
+See: .planning/PROJECT.md · Roadmap: .planning/ROADMAP.md · Requirements: .planning/REQUIREMENTS.md
 
-**Core value:** `ansible-playbook site.yml` on a fresh RHEL/Debian/Ubuntu host → working Guacamole login over HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is idempotent.
-**Current focus:** Multi-distro validation + compliance docs
+**Core value:** `ansible-playbook site.yml` on a fresh supported host → working Guacamole login
+over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is idempotent.
 
-## Roles (all implemented)
+## Paused: 2026-09-10 — HEAD `f980ea5` (43 commits) — working tree clean, no containers running
 
-| Role | Purpose | Status |
-|------|---------|--------|
-| common | repos, packages, firewall (firewalld/ufw), SELinux, guacd user, GUACAMOLE_HOME | ✓ RHEL / ◆ Debian (CI throttled) |
-| database | MariaDB local/remote, schema import + upgrade scripts, connector/j | ✓ RHEL / ✓ Debian (through schema) |
-| guacd | build guacamole-server from source, guacd.conf, systemd unit, optional TLS | ✓ RHEL / ◆ Debian |
-| guacamole_client | Tomcat, war, JDBC ext, guacamole.properties, stale-artifact pruning, session timeout | ✓ RHEL |
-| nginx_proxy | reverse proxy, RemoteIpValve, TLS 1.3 only, HSTS/CSP headers, LE (opt) | ✓ RHEL |
-| guac_extensions | TOTP/Duo/LDAP/quickconnect/histrec/branding — all toggle-driven, opt-in | ✓ RHEL |
-| connections | declarative connections/groups/users via custom idempotent module | ✓ RHEL (idempotent) |
-| backup | guac-backup / guac-restore, systemd timer, sha256, optional GPG (BCP/DR) | ✓ RHEL (backup+restore smoke) |
-| hardening | CIS-aligned OS+app, TLS1.3, chrony, syslog fwd, auto-patch, FIPS (opt-in) | ✓ RHEL |
+## Milestone 1 (Phases 1–9)
 
-## Validated (fresh Podman containers)
+| Area | State |
+|---|---|
+| RHEL 9 / RHEL 10 | ✅ validated — fresh container, full `site.yml` (all 9 roles), idempotent `changed=0`, guacadmin login via HTTPS proxy |
+| Debian 12 | ✅ validated through the whole build; `/etc/modprobe.d` fix committed |
+| Debian 13 / Ubuntu 22.04 / 24.04 / 26.04 | ◆ code paths in place; container CI not yet run green |
+| 9 roles (common, database, guacd, guacamole_client, nginx_proxy, guac_extensions, connections, backup, hardening) | ✅ implemented |
+| Docs: README + INSTALL/CONFIGURE/SCENARIOS/OPERATIONS/FIREWALL/LLD-RHEL-IRAP + architecture.drawio | ✅ |
+| container/ (Containerfile + compose + entrypoint) | ◆ implemented, image build not yet smoke-tested |
+| `.github/workflows/ci.yml` | ✅ lint + 7-distro build matrix + per-distro image matrix + guacd cache |
 
-- **RHEL 9 (Oracle Linux 9)**: full `site.yml` incl. hardening/backup/connections → idempotent `changed=0` → check.sh all green (4 services, HTTPS proxy login page, `guacadmin` token via proxy). test/run.sh PASS.
-- **RHEL 10 (Oracle Linux 10)**: validated iteratively (all roles, idempotent, check.sh green).
-- **Debian 12**: verified through common + database (MariaDB install, DB/user, schema import) + guacd build-deps. Full container CI blocked by test-env throughput to Debian CDN (~87 kB/s); freerdp package bug fixed (freerdp3-dev→freerdp2-dev fallback).
-- Debian 13 / Ubuntu 22.04 / 24.04: OS-family code paths in place, not yet run to completion.
+## Milestone 2
 
-## Deliverables
+| Phase | State | Commit |
+|---|---|---|
+| 10 CI guacd cache + per-distro images | ✅ code | d675686 |
+| 11 build guacd from a git ref (`guac_source_ref`) | ✅ code | cf2f572 |
+| 12 RDP session load balancing (BALANCING groups) | ✅ code | 5814ceb |
+| 13 LDAP-group RBAC (`guac_user_groups` + ldap-group props) | ✅ code | 45a3953 |
+| 14 external log forwarding over TLS / RELP+TLS | ✅ code | a66489d |
+| 15 full CIS L2 coverage | ○ planned (vendor ansible-lockdown CIS + OpenSCAP gate) |
+| 16 deep ISM alignment + LLD rewrite | ○ planned |
+| 17 operator manual → PDF | ○ planned |
+| 18 iac/ multi-tool (puppet/nix/chef/terraform-cdk) | ○ planned — RECOMMEND trimming to one; needs user decision |
+| 19 AWS Python CDK stack | ○ blocked on user creds; must destroy after test |
+| 20 Azure stack | ○ blocked on user creds; must destroy after test |
 
-- Docs: README, docs/{INSTALL,CONFIGURE,SCENARIOS,OPERATIONS,FIREWALL,LLD-RHEL-IRAP}.md
-- docs/architecture.drawio — data-flow diagram, 9 embedded brand logos
-- container/{Containerfile,docker-compose.yml,entrypoint.sh}
-- test/{run.sh (6-distro matrix),check.sh,dr.sh,upgrade.sh}
-- LLD includes a curated 54-control Australian ISM mapping (Implemented/Partial/Customer/Not-addressed) + out-of-scope list + POA&M seed
+## Phases 10–14 — NOT yet run live (context ran out). Validate with:
 
-## Next / open
+```
+cd ~/Documents/Projects/claude
+test/run.sh ol9                                  # smoke the base + hardening + connections + LB
+test/run.sh ol9 -k ; podman exec guac-test-ol9 ansible-playbook /root/guac/site.yml -e guac_source_ref=1.6.0   # phase 11
+test/run.sh debian12 debian13 ubuntu2204 ubuntu2404 ubuntu2604   # finish milestone-1 matrix
+test/dr.sh ol9 ; test/upgrade.sh ol9 1.5.5 1.6.0
+podman build -t guacamole-appliance:local -f container/Containerfile .
+```
 
-1. Finish Debian 12/13 + Ubuntu 22.04/24.04 container runs (background, throttled).
-2. test/dr.sh + test/upgrade.sh full runs.
-3. container/ image build + compose smoke.
-4. Pretty-render check of architecture.drawio.
+## Resume
+
+Say "resume". Next sensible work: run the validation block above and fix fallout, OR start
+Phase 15/16/17, OR (with a decision) Phase 18, OR (with creds) Phase 19/20.
 
 ## Notes
 
-- Never run Ansible on the laptop. Podman systemd containers only (arm64 host).
+- Never run Ansible on the laptop — Podman systemd containers only (arm64 host).
+- Debian/Ubuntu apt is slow to the default CDN here; `test/run.sh` swaps to the datautama mirror
+  (Debian) / ports.ubuntu.com (Ubuntu). Real deploys can set `guac_apt_mirror`.
 - Reference: itiligent/Easy-Guacamole-Installer, Guacamole 1.6.0. Do not push upstream.
-- Everything committed to git after each step — safe to pause any time.
+- Every step committed to git — closing the laptop loses only the cached container images.
 
 ---
-*Last updated: 2026-09-10*
+*Last updated: 2026-09-10 (pause after phases 10–14)*
