@@ -1,0 +1,9 @@
+---
+# Maps a toggle -> the Apache extension archive basename.
+# Each archive unpacks to <name>-<ver>/<name>-<ver>.jar
+guac_extension_matrix:
+  - { enabled: "{{ guac_totp_enabled | bool }}",         name: "guacamole-auth-totp" }
+  - { enabled: "{{ guac_duo_enabled | bool }}",          name: "guacamole-auth-duo" }
+  - { enabled: "{{ guac_ldap_enabled | bool }}",         name: "guacamole-auth-ldap" }
+  - { enabled: "{{ guac_quickconnect_enabled | bool }}", name: "guacamole-auth-quickconnect" }
+  - { enabled: "{{ guac_histrec_enabled | bool }}",      name: "guacamole-history-recording-storage" }

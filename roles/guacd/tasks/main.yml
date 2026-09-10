@@ -1,0 +1,115 @@
+---
+- name: Install guacd build toolchain
+  ansible.builtin.dnf:
+    name: "{{ guacd_build_toolchain }}"
+    state: present
+
+- name: Install guacd required build libraries
+  ansible.builtin.dnf:
+    name: "{{ guacd_build_libs }}"
+    state: present
+
+- name: Install guacd optional build libraries (best effort)
+  ansible.builtin.dnf:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ guacd_build_libs_optional }}"
+  failed_when: false
+
+- name: Detect installed guacd version
+  ansible.builtin.command: "{{ guac_server_prefix }}/sbin/guacd -v"
+  register: _guacd_v
+  changed_when: false
+  failed_when: false
+
+- name: Set build flag
+  ansible.builtin.set_fact:
+    _guacd_needs_build: "{{ guac_version not in (_guacd_v.stdout | default('')) }}"
+
+- name: Build and install guacamole-server
+  when: _guacd_needs_build | bool
+  block:
+    - name: Download guacamole-server source
+      block:
+        - name: Fetch server source (primary mirror)
+          ansible.builtin.get_url:
+            url: "{{ guacd_server_archive_url }}"
+            dest: "{{ guac_build_dir }}/guacamole-server-{{ guac_version }}.tar.gz"
+            mode: "0644"
+      rescue:
+        - name: Fetch server source (archive.apache.org fallback)
+          ansible.builtin.get_url:
+            url: "{{ guacd_server_archive_fallback_url }}"
+            dest: "{{ guac_build_dir }}/guacamole-server-{{ guac_version }}.tar.gz"
+            mode: "0644"
+
+    - name: Unpack guacamole-server source
+      ansible.builtin.unarchive:
+        src: "{{ guac_build_dir }}/guacamole-server-{{ guac_version }}.tar.gz"
+        dest: "{{ guac_build_dir }}"
+        remote_src: true
+        creates: "{{ guac_build_dir }}/guacamole-server-{{ guac_version }}/configure"
+
+    - name: Apply custom RDP share/printer labels
+      ansible.builtin.replace:
+        path: "{{ guac_build_dir }}/guacamole-server-{{ guac_version }}/src/protocols/rdp/settings.c"
+        regexp: '{{ item.re }}'
+        replace: '{{ item.rep }}'
+      loop:
+        - { re: 'IDX_CLIENT_NAME, "Guacamole RDP"', rep: 'IDX_CLIENT_NAME, "{{ guac_rdp_share_host }}"' }
+        - { re: 'IDX_DRIVE_NAME, "Guacamole Filesystem"', rep: 'IDX_DRIVE_NAME, "{{ guac_rdp_share_label }}"' }
+        - { re: 'IDX_PRINTER_NAME, "Guacamole Printer"', rep: 'IDX_PRINTER_NAME, "{{ guac_rdp_printer_label }}"' }
+      failed_when: false
+
+    - name: Configure guacamole-server
+      ansible.builtin.command:
+        cmd: "./configure --prefix={{ guac_server_prefix }} --with-systemd-dir=/etc/systemd/system {{ guac_server_configure_extra }}"
+        chdir: "{{ guac_build_dir }}/guacamole-server-{{ guac_version }}"
+      environment:
+        CFLAGS: "-Wno-error"
+      register: _guacd_configure
+      changed_when: true
+
+    - name: Compile guacamole-server
+      community.general.make:
+        chdir: "{{ guac_build_dir }}/guacamole-server-{{ guac_version }}"
+        jobs: "{{ ansible_processor_vcpus | default(2) }}"
+
+    - name: Install guacamole-server
+      community.general.make:
+        chdir: "{{ guac_build_dir }}/guacamole-server-{{ guac_version }}"
+        target: install
+
+    - name: Refresh linker cache
+      ansible.builtin.command: ldconfig
+      changed_when: true
+  notify: Restart guacd
+
+- name: Deploy guacd.conf
+  ansible.builtin.template:
+    src: guacd.conf.j2
+    dest: "{{ guac_home }}/guacd.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart guacd
+
+- name: Deploy guacd systemd unit
+  ansible.builtin.template:
+    src: guacd.service.j2
+    dest: /etc/systemd/system/guacd.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart guacd
+
+- name: Flush handlers (guacd must be up before client role)
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure guacd is enabled and running
+  ansible.builtin.service:
+    name: guacd
+    state: started
+    enabled: true

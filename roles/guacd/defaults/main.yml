@@ -1,0 +1,39 @@
+---
+# Core build toolchain
+guacd_build_toolchain:
+  - gcc
+  - gcc-c++
+  - make
+  - autoconf
+  - automake
+  - libtool
+  - libtool-ltdl-devel
+  - pkgconf-pkg-config
+
+# Required guacamole-server development libraries (AppStream + CRB + EPEL)
+guacd_build_libs:
+  - cairo-devel
+  - libjpeg-turbo-devel
+  - libpng-devel
+  - libuuid-devel
+  - freerdp-devel
+  - pango-devel
+  - libssh2-devel
+  - libtelnet-devel
+  - libvncserver-devel
+  - libwebsockets-devel
+  - pulseaudio-libs-devel
+  - libvorbis-devel
+  - libwebp-devel
+  - openssl-devel
+
+# Optional libs (extra codecs / recording). Installed best-effort.
+guacd_build_libs_optional:
+  - ffmpeg-devel
+  - libavcodec-free-devel
+  - libavformat-free-devel
+  - libavutil-free-devel
+  - libswscale-free-devel
+
+guacd_server_archive_url: "{{ guac_apache_dl_base }}/source/guacamole-server-{{ guac_version }}.tar.gz"
+guacd_server_archive_fallback_url: "{{ guac_apache_archive_base }}/source/guacamole-server-{{ guac_version }}.tar.gz"

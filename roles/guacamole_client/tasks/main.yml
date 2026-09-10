@@ -1,0 +1,152 @@
+---
+- name: Install Java
+  ansible.builtin.dnf:
+    name: "{{ guac_client_java_packages }}"
+    state: present
+
+- name: Create tomcat group
+  ansible.builtin.group:
+    name: "{{ guac_tomcat_group }}"
+    system: true
+
+- name: Create tomcat user
+  ansible.builtin.user:
+    name: "{{ guac_tomcat_user }}"
+    group: "{{ guac_tomcat_group }}"
+    system: true
+    shell: /sbin/nologin
+    home: "{{ guac_tomcat_home }}"
+    create_home: false
+
+- name: Download Apache Tomcat
+  block:
+    - name: Fetch Tomcat (primary mirror)
+      ansible.builtin.get_url:
+        url: "{{ guac_tomcat_tarball_url }}"
+        dest: "{{ guac_build_dir }}/apache-tomcat-{{ guac_tomcat_version }}.tar.gz"
+        mode: "0644"
+  rescue:
+    - name: Fetch Tomcat (archive.apache.org fallback)
+      ansible.builtin.get_url:
+        url: "{{ guac_tomcat_tarball_fallback_url }}"
+        dest: "{{ guac_build_dir }}/apache-tomcat-{{ guac_tomcat_version }}.tar.gz"
+        mode: "0644"
+
+- name: Unpack Tomcat
+  ansible.builtin.unarchive:
+    src: "{{ guac_build_dir }}/apache-tomcat-{{ guac_tomcat_version }}.tar.gz"
+    dest: /opt
+    remote_src: true
+    owner: "{{ guac_tomcat_user }}"
+    group: "{{ guac_tomcat_group }}"
+    creates: "{{ guac_tomcat_versioned_dir }}/bin/catalina.sh"
+
+- name: Own the Tomcat tree
+  ansible.builtin.file:
+    path: "{{ guac_tomcat_versioned_dir }}"
+    state: directory
+    owner: "{{ guac_tomcat_user }}"
+    group: "{{ guac_tomcat_group }}"
+    recurse: true
+
+- name: Symlink {{ guac_tomcat_home }}
+  ansible.builtin.file:
+    src: "{{ guac_tomcat_versioned_dir }}"
+    dest: "{{ guac_tomcat_home }}"
+    state: link
+
+- name: Remove bundled webapps we do not need
+  ansible.builtin.file:
+    path: "{{ guac_tomcat_home }}/webapps/{{ item }}"
+    state: absent
+  loop: [docs, examples, host-manager, manager]
+
+- name: Deploy Tomcat systemd unit
+  ansible.builtin.template:
+    src: tomcat.service.j2
+    dest: /etc/systemd/system/tomcat.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart tomcat
+
+# --- Guacamole web app + extensions ---------------------------------------
+- name: Download guacamole.war
+  block:
+    - name: Fetch war (primary mirror)
+      ansible.builtin.get_url:
+        url: "{{ guac_client_war_url }}"
+        dest: "{{ guac_home }}/guacamole.war"
+        owner: root
+        group: "{{ guac_tomcat_group }}"
+        mode: "0664"
+  rescue:
+    - name: Fetch war (archive.apache.org fallback)
+      ansible.builtin.get_url:
+        url: "{{ guac_client_war_fallback_url }}"
+        dest: "{{ guac_home }}/guacamole.war"
+        owner: root
+        group: "{{ guac_tomcat_group }}"
+        mode: "0664"
+
+- name: Link guacamole.war into Tomcat webapps
+  ansible.builtin.file:
+    src: "{{ guac_home }}/guacamole.war"
+    dest: "{{ guac_tomcat_home }}/webapps/guacamole.war"
+    state: link
+    owner: "{{ guac_tomcat_user }}"
+    group: "{{ guac_tomcat_group }}"
+    force: true
+  notify: Restart tomcat
+
+- name: Install JDBC MySQL auth extension
+  ansible.builtin.copy:
+    src: "{{ guac_build_dir }}/guacamole-auth-jdbc-{{ guac_version }}/mysql/guacamole-auth-jdbc-mysql-{{ guac_version }}.jar"
+    dest: "{{ guac_extensions_dir }}/guacamole-auth-jdbc-mysql-{{ guac_version }}.jar"
+    remote_src: true
+    owner: root
+    group: "{{ guac_tomcat_group }}"
+    mode: "0664"
+  notify: Restart tomcat
+
+- name: Template guacamole.properties
+  ansible.builtin.template:
+    src: guacamole.properties.j2
+    dest: "{{ guac_home }}/guacamole.properties"
+    owner: root
+    group: "{{ guac_tomcat_group }}"
+    mode: "0640"
+  notify: Restart tomcat
+
+- name: Tomcat URL redirect ( / -> /guacamole ) when no reverse proxy
+  ansible.builtin.copy:
+    dest: "{{ guac_tomcat_home }}/webapps/ROOT/index.jsp"
+    content: "<% response.sendRedirect(\"/guacamole\"); %>\n"
+    owner: "{{ guac_tomcat_user }}"
+    group: "{{ guac_tomcat_group }}"
+    mode: "0644"
+  when:
+    - guac_url_redirect | bool
+    - not (guac_install_nginx | bool)
+  notify: Restart tomcat
+
+- name: Flush handlers (Tomcat up before proxy/extensions)
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure Tomcat enabled and running
+  ansible.builtin.service:
+    name: tomcat
+    state: started
+    enabled: true
+
+- name: Wait for Guacamole web app
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:8080/guacamole/"
+    status_code: [200]
+    return_content: false
+  register: _guac_web
+  until: _guac_web.status == 200
+  retries: 30
+  delay: 5

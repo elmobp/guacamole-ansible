@@ -1,0 +1,38 @@
+# {{ ansible_managed }}
+# Guacamole reverse proxy — self-signed TLS (reference: 4a-install-tls-self-signed-nginx.sh)
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 443 ssl default_server;
+    listen [::]:443 ssl default_server;
+    server_name {{ guac_proxy_site }};
+
+    ssl_certificate     {{ guac_ssl_cert_dir }}/{{ guac_proxy_site }}.crt;
+    ssl_certificate_key {{ guac_ssl_key_dir }}/{{ guac_proxy_site }}.key;
+    ssl_session_cache   shared:SSL:4m;
+    ssl_session_timeout 1h;
+
+    location / {
+        proxy_pass {{ guac_proxy_upstream }};
+        proxy_buffering off;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 3600s;
+        access_log off;
+    }
+}
+
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+    return 301 https://$host$request_uri;
+}

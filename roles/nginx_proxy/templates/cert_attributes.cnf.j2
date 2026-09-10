@@ -1,0 +1,26 @@
+# {{ ansible_managed }}
+[req]
+distinguished_name = req_distinguished_name
+x509_extensions    = v3_req
+prompt             = no
+string_mask        = utf8only
+
+[req_distinguished_name]
+C  = {{ guac_cert_country }}
+ST = {{ guac_cert_state }}
+L  = {{ guac_cert_location }}
+O  = {{ guac_cert_org }}
+OU = {{ guac_cert_ou }}
+CN = {{ guac_proxy_site }}
+
+[v3_req]
+keyUsage         = nonRepudiation, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth, clientAuth
+subjectAltName   = @alt_names
+
+[alt_names]
+DNS.1 = {{ guac_proxy_site }}
+DNS.2 = {{ guac_server_name }}
+{% if ansible_default_ipv4.address is defined %}
+IP.1  = {{ ansible_default_ipv4.address }}
+{% endif %}

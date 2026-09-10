@@ -1,0 +1,9 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart guacd
+  ansible.builtin.service:
+    name: guacd
+    state: restarted

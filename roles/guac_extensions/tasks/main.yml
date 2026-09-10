@@ -1,0 +1,86 @@
+---
+- name: Select enabled extensions
+  ansible.builtin.set_fact:
+    _guac_enabled_extensions: "{{ guac_extension_matrix | selectattr('enabled', 'truthy') | list }}"
+    _guac_disabled_extensions: "{{ guac_extension_matrix | rejectattr('enabled', 'truthy') | list }}"
+
+- name: Download extension archives
+  ansible.builtin.get_url:
+    url: "{{ guac_apache_dl_base }}/binary/{{ item.name }}-{{ guac_version }}.tar.gz"
+    dest: "{{ guac_build_dir }}/{{ item.name }}-{{ guac_version }}.tar.gz"
+    mode: "0644"
+  loop: "{{ _guac_enabled_extensions }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Unpack extension archives
+  ansible.builtin.unarchive:
+    src: "{{ guac_build_dir }}/{{ item.name }}-{{ guac_version }}.tar.gz"
+    dest: "{{ guac_build_dir }}"
+    remote_src: true
+    creates: "{{ guac_build_dir }}/{{ item.name }}-{{ guac_version }}/{{ item.name }}-{{ guac_version }}.jar"
+  loop: "{{ _guac_enabled_extensions }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Install extension jars
+  ansible.builtin.copy:
+    src: "{{ guac_build_dir }}/{{ item.name }}-{{ guac_version }}/{{ item.name }}-{{ guac_version }}.jar"
+    dest: "{{ guac_extensions_dir }}/{{ item.name }}-{{ guac_version }}.jar"
+    remote_src: true
+    owner: root
+    group: "{{ guac_tomcat_group }}"
+    mode: "0664"
+  loop: "{{ _guac_enabled_extensions }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: Restart tomcat
+
+- name: Remove disabled extension jars
+  ansible.builtin.file:
+    path: "{{ guac_extensions_dir }}/{{ item.name }}-{{ guac_version }}.jar"
+    state: absent
+  loop: "{{ _guac_disabled_extensions }}"
+  loop_control:
+    label: "{{ item.name }}"
+  notify: Restart tomcat
+
+# --- History recording storage path ------------------------------------
+- name: Create history recording path
+  ansible.builtin.file:
+    path: "{{ guac_histrec_path }}"
+    state: directory
+    owner: "{{ guac_guacd_account }}"
+    group: "{{ guac_tomcat_group }}"
+    mode: "2750"
+  when: guac_histrec_enabled | bool
+
+# --- Branding / dark theme -------------------------------------------
+- name: Install branding.jar (dark theme)
+  ansible.builtin.copy:
+    src: branding.jar
+    dest: "{{ guac_extensions_dir }}/branding.jar"
+    owner: root
+    group: "{{ guac_tomcat_group }}"
+    mode: "0664"
+  when: guac_branding_enabled | bool
+  notify: Restart tomcat
+
+- name: Remove branding.jar when disabled
+  ansible.builtin.file:
+    path: "{{ guac_extensions_dir }}/branding.jar"
+    state: absent
+  when: not (guac_branding_enabled | bool)
+  notify: Restart tomcat
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Re-verify Guacamole after extension changes
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:8080/guacamole/"
+    status_code: [200]
+  register: _guac_ext_check
+  until: _guac_ext_check.status == 200
+  retries: 24
+  delay: 5

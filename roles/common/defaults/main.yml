@@ -1,0 +1,13 @@
+---
+# Base packages present on every Guacamole host.
+common_base_packages:
+  - policycoreutils
+  - policycoreutils-python-utils
+  - firewalld
+  - tar
+  - gzip
+  - wget
+  - curl
+  - ca-certificates
+  - openssl
+  - python3

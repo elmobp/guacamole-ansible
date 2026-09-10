@@ -1,0 +1,26 @@
+---
+- name: Create backup directory
+  ansible.builtin.file:
+    path: "{{ guac_db_backup_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install backup script
+  ansible.builtin.template:
+    src: backup-guacamole.sh.j2
+    dest: /usr/local/sbin/backup-guacamole.sh
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Schedule Guacamole database backup
+  ansible.builtin.cron:
+    name: "backup guacamole"
+    job: "/usr/local/sbin/backup-guacamole.sh >/dev/null 2>&1"
+    minute: "{{ guac_db_backup_schedule.split()[0] }}"
+    hour: "{{ guac_db_backup_schedule.split()[1] }}"
+    day: "{{ guac_db_backup_schedule.split()[2] }}"
+    month: "{{ guac_db_backup_schedule.split()[3] }}"
+    weekday: "{{ guac_db_backup_schedule.split()[4] }}"

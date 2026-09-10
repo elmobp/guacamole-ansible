@@ -1,0 +1,165 @@
+---
+- name: Install MariaDB server packages
+  ansible.builtin.dnf:
+    name: "{{ database_server_packages }}"
+    state: present
+  when: guac_install_mariadb | bool
+
+- name: Install MySQL client packages (remote DB)
+  ansible.builtin.dnf:
+    name: "{{ database_client_packages }}"
+    state: present
+  when: not (guac_install_mariadb | bool)
+
+- name: Enable and start MariaDB
+  ansible.builtin.service:
+    name: mariadb
+    state: started
+    enabled: true
+  when: guac_install_mariadb | bool
+
+- name: Wait for MariaDB socket
+  ansible.builtin.wait_for:
+    path: "{{ guac_mariadb_socket }}"
+    timeout: 60
+  when: guac_install_mariadb | bool
+
+# --- Local hardening (reference: mysql_secure_installation) ------------------
+- name: Harden local MariaDB
+  community.mysql.mysql_query:
+    login_user: root
+    login_unix_socket: "{{ guac_mariadb_socket }}"
+    query:
+      - "DELETE FROM mysql.global_priv WHERE User=''"
+      - "DELETE FROM mysql.global_priv WHERE User='root' AND Host NOT IN ('localhost','127.0.0.1','::1')"
+      - "DROP DATABASE IF EXISTS test"
+      - "DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%'"
+      - "FLUSH PRIVILEGES"
+  when:
+    - guac_install_mariadb | bool
+    - guac_secure_mariadb | bool
+  changed_when: false
+
+- name: Set MariaDB default time zone
+  ansible.builtin.copy:
+    dest: /etc/my.cnf.d/guacamole-tz.cnf
+    content: |
+      [mariadbd]
+      default_time_zone = {{ guac_db_timezone }}
+    owner: root
+    group: root
+    mode: "0644"
+  when: guac_install_mariadb | bool
+  notify: Restart mariadb
+
+- name: Flush handlers now (timezone must apply before schema load)
+  ansible.builtin.meta: flush_handlers
+
+# --- Database + user -------------------------------------------------------
+- name: Create Guacamole database
+  community.mysql.mysql_db:
+    name: "{{ guac_db_name }}"
+    state: present
+    login_user: root
+    login_unix_socket: "{{ guac_mariadb_socket }}"
+  when: guac_install_mariadb | bool
+
+- name: Create Guacamole database user
+  community.mysql.mysql_user:
+    name: "{{ guac_db_user }}"
+    password: "{{ guac_db_password }}"
+    host: "{{ 'localhost' if guac_mysql_host == 'localhost' else '%' }}"
+    priv: "{{ guac_db_name }}.*:SELECT,INSERT,UPDATE,DELETE"
+    state: present
+    login_user: root
+    login_unix_socket: "{{ guac_mariadb_socket }}"
+  when: guac_install_mariadb | bool
+
+# --- Schema import ------------------------------------------------------
+- name: Ensure build dir
+  ansible.builtin.file:
+    path: "{{ guac_build_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Download guacamole-auth-jdbc archive
+  block:
+    - name: Fetch jdbc archive (primary mirror)
+      ansible.builtin.get_url:
+        url: "{{ guac_jdbc_archive_url }}"
+        dest: "{{ guac_build_dir }}/guacamole-auth-jdbc-{{ guac_version }}.tar.gz"
+        mode: "0644"
+  rescue:
+    - name: Fetch jdbc archive (archive.apache.org fallback)
+      ansible.builtin.get_url:
+        url: "{{ guac_jdbc_archive_fallback_url }}"
+        dest: "{{ guac_build_dir }}/guacamole-auth-jdbc-{{ guac_version }}.tar.gz"
+        mode: "0644"
+
+- name: Unpack jdbc archive
+  ansible.builtin.unarchive:
+    src: "{{ guac_build_dir }}/guacamole-auth-jdbc-{{ guac_version }}.tar.gz"
+    dest: "{{ guac_build_dir }}"
+    remote_src: true
+    creates: "{{ guac_build_dir }}/guacamole-auth-jdbc-{{ guac_version }}/mysql/schema"
+
+- name: Check whether schema is already loaded
+  community.mysql.mysql_query:
+    login_user: root
+    login_unix_socket: "{{ guac_mariadb_socket }}"
+    query: >-
+      SELECT COUNT(*) AS n FROM information_schema.tables
+      WHERE table_schema = '{{ guac_db_name }}' AND table_name = 'guacamole_user'
+  register: _schema_check
+  when: guac_install_mariadb | bool
+  changed_when: false
+
+- name: Assemble schema SQL
+  ansible.builtin.shell: >-
+    cat {{ guac_build_dir }}/guacamole-auth-jdbc-{{ guac_version }}/mysql/schema/*.sql
+    > {{ guac_build_dir }}/guac-schema-combined.sql
+  args:
+    creates: "{{ guac_build_dir }}/guac-schema-combined.sql"
+  when:
+    - guac_install_mariadb | bool
+    - (_schema_check.query_result[0][0].n | int) == 0
+
+- name: Import Guacamole schema
+  community.mysql.mysql_db:
+    name: "{{ guac_db_name }}"
+    state: import
+    target: "{{ guac_build_dir }}/guac-schema-combined.sql"
+    login_user: root
+    login_unix_socket: "{{ guac_mariadb_socket }}"
+  when:
+    - guac_install_mariadb | bool
+    - (_schema_check.query_result[0][0].n | int) == 0
+
+# --- MySQL Connector/J ------------------------------------------------
+- name: Download MySQL Connector/J
+  ansible.builtin.get_url:
+    url: "{{ guac_mysql_connector_j_url }}"
+    dest: "{{ guac_build_dir }}/mysql-connector-j-{{ guac_mysql_connector_j_version }}.tar.gz"
+    mode: "0644"
+
+- name: Unpack MySQL Connector/J
+  ansible.builtin.unarchive:
+    src: "{{ guac_build_dir }}/mysql-connector-j-{{ guac_mysql_connector_j_version }}.tar.gz"
+    dest: "{{ guac_build_dir }}"
+    remote_src: true
+    creates: "{{ guac_build_dir }}/mysql-connector-j-{{ guac_mysql_connector_j_version }}/mysql-connector-j-{{ guac_mysql_connector_j_version }}.jar"
+
+- name: Install Connector/J jar into GUACAMOLE_HOME/lib
+  ansible.builtin.copy:
+    src: "{{ guac_build_dir }}/mysql-connector-j-{{ guac_mysql_connector_j_version }}/mysql-connector-j-{{ guac_mysql_connector_j_version }}.jar"
+    dest: "{{ guac_lib_dir }}/mysql-connector-java.jar"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart tomcat
+
+# --- Backup job ------------------------------------------------------
+- name: Include backup job tasks
+  ansible.builtin.include_tasks: backup.yml
+  when: guac_db_backup_enabled | bool

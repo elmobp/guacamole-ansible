@@ -1,0 +1,189 @@
+---
+- name: Install dnf plugins core
+  ansible.builtin.dnf:
+    name: dnf-plugins-core
+    state: present
+
+# --- EPEL --------------------------------------------------------------------
+- name: Enable EPEL (Oracle Linux package)
+  ansible.builtin.dnf:
+    name: "oracle-epel-release-el{{ ansible_distribution_major_version }}"
+    state: present
+  when:
+    - guac_enable_epel | bool
+    - ansible_distribution == "OracleLinux"
+  register: _epel_ol
+  failed_when: false
+
+- name: Enable EPEL (generic epel-release rpm)
+  ansible.builtin.dnf:
+    name: "https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm"
+    state: present
+    disable_gpg_check: true
+  when:
+    - guac_enable_epel | bool
+    - ansible_distribution != "OracleLinux"
+    - (_epel_ol is not defined) or (_epel_ol.rc | default(1) != 0)
+
+# --- CRB / CodeReady Builder / PowerTools -----------------------------------
+- name: Discover repo ids
+  ansible.builtin.command: dnf repolist --all
+  changed_when: false
+  register: _repolist
+  when: guac_enable_crb | bool
+
+- name: Enable CRB-equivalent repository
+  ansible.builtin.command: "dnf config-manager --set-enabled {{ item }}"
+  changed_when: true
+  failed_when: false
+  loop:
+    - "ol{{ ansible_distribution_major_version }}_codeready_builder"
+    - "crb"
+    - "powertools"
+    - "codeready-builder-for-rhel-{{ ansible_distribution_major_version }}-{{ ansible_architecture }}-rpms"
+  when:
+    - guac_enable_crb | bool
+    - item in _repolist.stdout
+
+- name: Enable RPM Fusion free (optional, for ffmpeg-devel)
+  ansible.builtin.dnf:
+    name: "https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-{{ ansible_distribution_major_version }}.noarch.rpm"
+    state: present
+    disable_gpg_check: true
+  when: guac_enable_rpmfusion | bool
+
+- name: Refresh dnf metadata
+  ansible.builtin.dnf:
+    update_cache: true
+
+- name: Install base packages
+  ansible.builtin.dnf:
+    name: "{{ common_base_packages }}"
+    state: present
+
+# --- Hostname / local DNS (optional) ---------------------------------------
+- name: Set hostname
+  ansible.builtin.hostname:
+    name: "{{ guac_fqdn }}"
+  when: guac_manage_hostname | bool
+
+- name: Ensure /etc/hosts entry for this host
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^\S+\s+{{ guac_fqdn | regex_escape() }}\b'
+    line: "{{ ansible_default_ipv4.address | default('127.0.1.1') }} {{ guac_fqdn }} {{ guac_server_name }}"
+    state: present
+  when: guac_manage_hostname | bool
+
+# --- Firewall --------------------------------------------------------------
+- name: Enable and start firewalld
+  ansible.builtin.service:
+    name: firewalld
+    state: started
+    enabled: true
+  when: guac_manage_firewall | bool
+  register: _fw_start
+  failed_when: false
+
+- name: Open firewall services/ports
+  ansible.posix.firewalld:
+    service: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop:
+    - ssh
+    - http
+    - https
+  when:
+    - guac_manage_firewall | bool
+    - _fw_start.state | default('') == 'started'
+
+- name: Open direct Guacamole port when reverse proxy is disabled
+  ansible.posix.firewalld:
+    port: "8080/tcp"
+    permanent: true
+    immediate: true
+    state: "{{ 'disabled' if guac_install_nginx | bool else 'enabled' }}"
+  when:
+    - guac_manage_firewall | bool
+    - _fw_start.state | default('') == 'started'
+
+- name: Open extra firewall ports
+  ansible.posix.firewalld:
+    port: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ guac_firewall_extra_ports }}"
+  when:
+    - guac_manage_firewall | bool
+    - _fw_start.state | default('') == 'started'
+
+# --- SELinux --------------------------------------------------------------
+- name: Query SELinux state
+  ansible.builtin.command: getenforce
+  changed_when: false
+  failed_when: false
+  register: _selinux
+
+- name: Allow HTTPD/Nginx network connections (proxy to Tomcat)
+  ansible.posix.seboolean:
+    name: "{{ item }}"
+    state: true
+    persistent: true
+  loop:
+    - httpd_can_network_connect
+    - httpd_can_network_relay
+  when:
+    - guac_manage_selinux | bool
+    - _selinux.stdout | default('Disabled') != 'Disabled'
+
+# --- guacd service account ----------------------------------------------
+- name: Create locked-down guacd service account
+  ansible.builtin.user:
+    name: "{{ guac_guacd_account }}"
+    system: true
+    shell: /sbin/nologin
+    home: "/var/lib/{{ guac_guacd_account }}"
+    create_home: true
+    password_lock: true
+    comment: "Guacamole guacd daemon"
+
+- name: Deny guacd account cron access
+  ansible.builtin.lineinfile:
+    path: /etc/cron.deny
+    line: "{{ guac_guacd_account }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: FreeRDP profile dir for guacd (certificate storage)
+  ansible.builtin.file:
+    path: "/var/lib/{{ guac_guacd_account }}/.config/freerdp"
+    state: directory
+    owner: "{{ guac_guacd_account }}"
+    group: "{{ guac_guacd_account }}"
+    mode: "0700"
+
+# --- GUACAMOLE_HOME -----------------------------------------------------
+- name: Create GUACAMOLE_HOME tree
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ guac_home }}"
+    - "{{ guac_extensions_dir }}"
+    - "{{ guac_lib_dir }}"
+
+- name: Create shared guacd runtime dir
+  ansible.builtin.file:
+    path: /var/guacamole
+    state: directory
+    owner: "{{ guac_guacd_account }}"
+    group: "{{ guac_guacd_account }}"
+    mode: "0750"

@@ -1,0 +1,22 @@
+# {{ ansible_managed }}
+# guacd reads {{ guac_home }}/guacd.conf automatically.
+[Unit]
+Description=Guacamole proxy daemon (guacd)
+Documentation=man:guacd(8)
+After=network.target
+
+[Service]
+User={{ guac_guacd_account }}
+Group={{ guac_guacd_account }}
+Type=simple
+ExecStart={{ guac_server_prefix }}/sbin/guacd -f
+Restart=on-failure
+RuntimeDirectory=guacd
+RuntimeDirectoryMode=0755
+LimitNOFILE=32768
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=false
+
+[Install]
+WantedBy=multi-user.target

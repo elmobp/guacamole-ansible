@@ -1,0 +1,14 @@
+---
+guac_client_java_packages:
+  - java-17-openjdk-headless
+
+guac_tomcat_user: "tomcat"
+guac_tomcat_group: "tomcat"
+guac_tomcat_versioned_dir: "/opt/apache-tomcat-{{ guac_tomcat_version }}"
+guac_tomcat_catalina_opts: "-Djava.awt.headless=true -Xms256m -Xmx1024m"
+
+guac_client_war_url: "{{ guac_apache_dl_base }}/binary/guacamole-{{ guac_version }}.war"
+guac_client_war_fallback_url: "{{ guac_apache_archive_base }}/binary/guacamole-{{ guac_version }}.war"
+
+guac_tomcat_tarball_url: "{{ guac_tomcat_dl_base }}/apache-tomcat-{{ guac_tomcat_version }}.tar.gz"
+guac_tomcat_tarball_fallback_url: "{{ guac_tomcat_archive_base }}/apache-tomcat-{{ guac_tomcat_version }}.tar.gz"

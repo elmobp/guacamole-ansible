@@ -1,0 +1,17 @@
+---
+guac_mariadb_socket: "/var/lib/mysql/mysql.sock"
+
+database_server_packages:
+  - mariadb-server
+  - mariadb
+  - python3-PyMySQL
+
+database_client_packages:
+  - mariadb
+  - python3-PyMySQL
+
+# guacamole-auth-jdbc archive (provides the MySQL schema + the mysql auth jar)
+guac_jdbc_archive_url: >-
+  {{ guac_apache_dl_base }}/binary/guacamole-auth-jdbc-{{ guac_version }}.tar.gz
+guac_jdbc_archive_fallback_url: >-
+  {{ guac_apache_archive_base }}/binary/guacamole-auth-jdbc-{{ guac_version }}.tar.gz

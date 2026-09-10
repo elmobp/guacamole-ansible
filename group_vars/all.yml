@@ -1,0 +1,155 @@
+---
+# =============================================================================
+# Ansible Guacamole Installer (RHEL edition) — master configuration
+# Every value below maps to a setting from the original Easy-Guacamole-Installer
+# shell scripts. Override in inventory group_vars/host_vars or with -e.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Versions (reference: 1-setup.sh)
+# ---------------------------------------------------------------------------
+guac_version: "1.6.0"
+guac_mysql_connector_j_version: "9.3.0"
+# Apache Tomcat (installed from the official binary tarball — RHEL has no stable pkg)
+guac_tomcat_version: "9.0.109"
+guac_tomcat_major: "9"
+
+# Download mirrors
+guac_apache_dl_base: "https://dlcdn.apache.org/guacamole/{{ guac_version }}"
+guac_apache_archive_base: "https://archive.apache.org/dist/guacamole/{{ guac_version }}"
+guac_tomcat_dl_base: "https://dlcdn.apache.org/tomcat/tomcat-{{ guac_tomcat_major }}/v{{ guac_tomcat_version }}/bin"
+guac_tomcat_archive_base: "https://archive.apache.org/dist/tomcat/tomcat-{{ guac_tomcat_major }}/v{{ guac_tomcat_version }}/bin"
+guac_mysql_connector_j_url: "https://dev.mysql.com/get/Downloads/Connector-J/mysql-connector-j-{{ guac_mysql_connector_j_version }}.tar.gz"
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+guac_home: "/etc/guacamole"                     # GUACAMOLE_HOME
+guac_extensions_dir: "{{ guac_home }}/extensions"
+guac_lib_dir: "{{ guac_home }}/lib"
+guac_build_dir: "/usr/local/src/guacamole"      # source checkout / build area
+guac_tomcat_home: "/opt/tomcat"                 # symlink -> versioned dir
+guac_server_prefix: "/usr/local"                # guacd install prefix (make install)
+
+# ---------------------------------------------------------------------------
+# System identity (reference: SERVER_NAME / LOCAL_DOMAIN / PROXY_SITE)
+# ---------------------------------------------------------------------------
+guac_manage_hostname: false                     # set true to enforce hostname/domain
+guac_server_name: "{{ ansible_hostname }}"
+guac_local_domain: "guac.local"
+guac_fqdn: "{{ guac_server_name }}.{{ guac_local_domain }}"
+# DNS name the reverse proxy + TLS cert answer to
+guac_proxy_site: "{{ guac_fqdn }}"
+
+# ---------------------------------------------------------------------------
+# Repos / packages (reference: distro package workarounds)
+# ---------------------------------------------------------------------------
+guac_enable_epel: true
+guac_enable_crb: true                           # CRB (EL9/10) / PowerTools
+guac_enable_rpmfusion: false                    # only for ffmpeg-devel; optional codecs
+guac_extra_build_packages: []
+
+# ---------------------------------------------------------------------------
+# Firewall (reference: ufw rules)
+# ---------------------------------------------------------------------------
+guac_manage_firewall: true
+guac_firewall_extra_ports: []                   # e.g. ["3306/tcp"]
+
+# ---------------------------------------------------------------------------
+# SELinux
+# ---------------------------------------------------------------------------
+guac_manage_selinux: true                       # set booleans for nginx->tomcat proxy
+
+# ---------------------------------------------------------------------------
+# guacd service account (reference: GUACD_ACCOUNT)
+# ---------------------------------------------------------------------------
+guac_guacd_account: "guacd"
+guac_guacd_bind_host: "127.0.0.1"
+guac_guacd_bind_port: 4822
+# Extra configure flags for guacamole-server ./configure
+guac_server_configure_extra: ""                 # e.g. "--enable-allow-freerdp-snapshots"
+
+# ---------------------------------------------------------------------------
+# Database (reference: INSTALL_MYSQL / MYSQL_* / GUAC_* / SECURE_MYSQL)
+# ---------------------------------------------------------------------------
+guac_install_mariadb: true                      # false => use a remote server
+guac_secure_mariadb: true
+guac_mysql_host: "localhost"
+guac_mysql_port: 3306
+guac_db_name: "guacamole_db"
+guac_db_user: "guacamole_user"
+guac_db_password: "ChangeMe_GuacDB_2026"        # OVERRIDE in a vault for production
+guac_mysql_root_password: "ChangeMe_Root_2026"  # OVERRIDE in a vault for production
+guac_db_timezone: "UTC"
+
+# Database backup job (reference: backup-guacamole.sh + crontab)
+guac_db_backup_enabled: true
+guac_db_backup_dir: "/var/backups/guacamole"
+guac_db_backup_retention_days: 30
+guac_db_backup_schedule: "0 0 * * 1-5"
+
+# ---------------------------------------------------------------------------
+# RDP display labels (reference: RDP_SHARE_* / RDP_PRINTER_LABEL)
+# ---------------------------------------------------------------------------
+guac_rdp_share_host: "{{ guac_server_name }}"
+guac_rdp_share_label: "RDP Share"
+guac_rdp_printer_label: "RDP Printer"
+
+# ---------------------------------------------------------------------------
+# Reverse proxy / TLS (reference: INSTALL_NGINX / SELF_SIGN / LETS_ENCRYPT)
+# ---------------------------------------------------------------------------
+guac_install_nginx: true
+guac_url_redirect: true                          # /  ->  /guacamole  (only when nginx disabled)
+guac_tls_mode: "self-signed"                     # self-signed | letsencrypt | none
+
+# Self-signed cert attributes (reference: CERT_* / RSA_KEYLENGTH)
+guac_cert_rsa_keylength: 2048
+guac_cert_country: "AU"
+guac_cert_state: "Victoria"
+guac_cert_location: "Melbourne"
+guac_cert_org: "Itiligent"
+guac_cert_ou: "I.T."
+guac_cert_days: 3650
+guac_ssl_cert_dir: "/etc/nginx/ssl/cert"
+guac_ssl_key_dir: "/etc/nginx/ssl/private"
+
+# Let's Encrypt (reference: LE_DNS_NAME / LE_EMAIL) — production only
+guac_le_dns_name: ""
+guac_le_email: ""
+
+# ---------------------------------------------------------------------------
+# Optional Guacamole extensions (reference: INSTALL_TOTP/DUO/LDAP/QCONNECT/HISTREC)
+# ---------------------------------------------------------------------------
+guac_totp_enabled: false
+guac_duo_enabled: false
+guac_ldap_enabled: false
+guac_quickconnect_enabled: false
+guac_histrec_enabled: false
+guac_histrec_path: "/var/lib/guacamole/recordings"
+guac_branding_enabled: true                      # dark-theme branding.jar
+
+# LDAP settings (reference: add-auth-ldap.sh) — templated, NOT login-tested here
+guac_ldap:
+  hostname: "dc1.yourdomain.com dc2.yourdomain.com"
+  port: 389
+  username_attribute: "sAMAccountName"
+  encryption_method: "none"
+  search_bind_dn: "ad-account@yourdomain.com"
+  search_bind_password: "ad-account-password"
+  config_base_dn: "dc=domain,dc=com"
+  user_base_dn: "OU=SomeOU,DC=domain,DC=com"
+  user_search_filter: "(objectClass=user)(!(objectCategory=computer))"
+  max_search_results: 200
+
+# DUO settings (reference: guacamole.properties duo-* stubs) — fill for production
+guac_duo:
+  api_hostname: ""
+  integration_key: ""
+  secret_key: ""
+  application_key: ""
+
+# ---------------------------------------------------------------------------
+# Default admin (created by the JDBC schema) — for post-install verification
+# ---------------------------------------------------------------------------
+guac_default_admin_user: "guacadmin"
+guac_default_admin_password: "guacadmin"

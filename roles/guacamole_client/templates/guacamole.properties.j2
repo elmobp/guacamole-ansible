@@ -1,0 +1,43 @@
+# {{ ansible_managed }}
+# Guacamole configuration (reference: 2-install-guacamole.sh)
+
+guacd-hostname: {{ guac_guacd_bind_host }}
+guacd-port: {{ guac_guacd_bind_port }}
+
+# MySQL / MariaDB JDBC authentication
+mysql-hostname: {{ guac_mysql_host }}
+mysql-port: {{ guac_mysql_port }}
+mysql-database: {{ guac_db_name }}
+mysql-username: {{ guac_db_user }}
+mysql-password: {{ guac_db_password }}
+{% if guac_totp_enabled | bool %}
+
+# TOTP MFA
+{% endif %}
+{% if guac_duo_enabled | bool %}
+
+# Duo MFA
+duo-api-hostname: {{ guac_duo.api_hostname }}
+duo-integration-key: {{ guac_duo.integration_key }}
+duo-secret-key: {{ guac_duo.secret_key }}
+duo-application-key: {{ guac_duo.application_key }}
+{% endif %}
+{% if guac_ldap_enabled | bool %}
+
+# LDAP / Active Directory
+ldap-hostname: {{ guac_ldap.hostname }}
+ldap-port: {{ guac_ldap.port }}
+ldap-username-attribute: {{ guac_ldap.username_attribute }}
+ldap-encryption-method: {{ guac_ldap.encryption_method }}
+ldap-search-bind-dn: {{ guac_ldap.search_bind_dn }}
+ldap-search-bind-password: {{ guac_ldap.search_bind_password }}
+ldap-config-base-dn: {{ guac_ldap.config_base_dn }}
+ldap-user-base-dn: {{ guac_ldap.user_base_dn }}
+ldap-user-search-filter: {{ guac_ldap.user_search_filter }}
+ldap-max-search-results: {{ guac_ldap.max_search_results }}
+{% endif %}
+{% if guac_histrec_enabled | bool %}
+
+# History recording storage
+recording-search-path: {{ guac_histrec_path }}
+{% endif %}

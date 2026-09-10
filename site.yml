@@ -1,0 +1,48 @@
+---
+# =============================================================================
+# Apache Guacamole jump-host — full build for RHEL 9 / RHEL 10 (and OL/Rocky/Alma)
+# Reimplementation of itiligent/Easy-Guacamole-Installer as Ansible roles.
+#
+#   ansible-playbook site.yml
+#
+# Tags: common, database, guacd, client, proxy, extensions
+# =============================================================================
+- name: Deploy Apache Guacamole
+  hosts: guacamole
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Assert RHEL family
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == "RedHat"
+          - ansible_distribution_major_version | int in [9, 10]
+        fail_msg: >-
+          This playbook targets RHEL 9/10 family hosts
+          (detected {{ ansible_distribution }} {{ ansible_distribution_major_version }}).
+        success_msg: "{{ ansible_distribution }} {{ ansible_distribution_major_version }} OK"
+
+  roles:
+    - role: common
+      tags: [common]
+    - role: database
+      tags: [database]
+    - role: guacd
+      tags: [guacd]
+    - role: guacamole_client
+      tags: [client]
+    - role: nginx_proxy
+      when: guac_install_nginx | bool
+      tags: [proxy]
+    - role: guac_extensions
+      tags: [extensions]
+
+  post_tasks:
+    - name: Report endpoints
+      ansible.builtin.debug:
+        msg:
+          - "Guacamole build complete."
+          - "Direct:  http://{{ guac_proxy_site }}:8080/guacamole/"
+          - "{{ 'Proxy:   https://' ~ guac_proxy_site ~ '/' if guac_install_nginx | bool else 'Reverse proxy disabled.' }}"
+          - "Login:   {{ guac_default_admin_user }} / {{ guac_default_admin_password }}  (change immediately)"

@@ -1,0 +1,23 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Apache Tomcat {{ guac_tomcat_version }} (Guacamole web client)
+After=network.target guacd.service
+Wants=guacd.service
+
+[Service]
+Type=simple
+User={{ guac_tomcat_user }}
+Group={{ guac_tomcat_group }}
+Environment="JAVA_HOME=/usr/lib/jvm/jre"
+Environment="CATALINA_HOME={{ guac_tomcat_home }}"
+Environment="CATALINA_BASE={{ guac_tomcat_home }}"
+Environment="CATALINA_PID={{ guac_tomcat_home }}/temp/tomcat.pid"
+Environment="CATALINA_OPTS={{ guac_tomcat_catalina_opts }}"
+Environment="GUACAMOLE_HOME={{ guac_home }}"
+ExecStart={{ guac_tomcat_home }}/bin/catalina.sh run
+ExecStop={{ guac_tomcat_home }}/bin/catalina.sh stop 10 -force
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
