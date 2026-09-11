@@ -1,0 +1,929 @@
+---
+# =============================================================================
+# ISM control mapping for the ansible-guacamole jump-host build.
+#
+#   control id -> { theme, status, ref, note }
+#
+# Consumed by scripts/ism_map.py, which joins each id to its statement in
+# docs/data/ism-controls.json and regenerates section 12 of
+# docs/LLD-RHEL-IRAP.md. Edit here, then run:
+#
+#     python3 scripts/ism_map.py
+#
+# Rules for adding a row (see docs/ISM.md for the full methodology):
+#   1. The control statement must describe something this repository actually
+#      does, deliberately does not do, or directly enables. No keyword matches.
+#   2. `note` must cite the concrete evidence — a variable, file, unit
+#      directive or verified behaviour. If you cannot, the row does not belong.
+#   3. `status` is honest, not aspirational:
+#        implemented   - configured by default, or by a documented toggle
+#        partial       - implemented in part, or needs a variable / operational step
+#        customer      - the build supports it; an org process must operate it
+#        not-addressed - a real gap; it belongs in the POA&M (section 12.2)
+#
+# THE CURRENTLY PUBLISHED ISM IS AUTHORITATIVE. Control numbers and wording
+# drift between releases — see docs/data/ism-controls.meta.json for the
+# retrieval date of the dataset these ids were checked against.
+# =============================================================================
+
+# Table groupings, rendered in key order.
+themes:
+  "01-governance": "System assurance, assessment and emergency access"
+  "02-gateway": "Jump-host / gateway and session brokering"
+  "03-network": "Network design, firewalling and segregation"
+  "04-os": "Operating system hardening and secure configuration"
+  "05-server-apps": "Server application hardening (Tomcat, nginx, guacd, MariaDB)"
+  "06-web": "Web application security"
+  "07-database": "Database systems"
+  "08-crypto": "Cryptographic fundamentals, TLS and certificates"
+  "09-ssh": "Secure Shell"
+  "10-identity": "Identification, authentication and multi-factor authentication"
+  "11-access": "Access control, sessions and account management"
+  "12-privileged": "Privileged access management"
+  "13-logging": "Event logging, central storage, monitoring and time"
+  "14-patching": "Patch and vulnerability management"
+  "15-backup": "Data backup and restoration"
+  "16-supply": "Software supply chain and build integrity"
+
+# Design references: "link text|#anchor" into docs/LLD-RHEL-IRAP.md.
+refs:
+  scope: "§1 Purpose & scope|#scope"
+  arch: "§2 Architecture overview|#arch"
+  guacd: "§3.1 Guacamole server (guacd)|#guacd"
+  webapp: "§3.2 Guacamole web application|#webapp"
+  db: "§3.3 Database|#db"
+  web: "§3.4 Web application & reverse proxy|#web"
+  net: "§4 Network & firewall design|#net"
+  osbuild: "§5.1 Build & SOE|#os-build"
+  hardening: "§5.2 OS hardening|#hardening"
+  apphard: "§5.3 Application hardening|#app-hardening"
+  access: "§6.1 Access control & sessions|#access"
+  auth: "§6.2 Authentication|#auth"
+  privileged: "§6.3 Privileged access|#privileged"
+  crypto: "§7 Cryptography|#crypto"
+  fips: "§7.4 Evaluated cryptography / FIPS|#fips"
+  patching: "§8 Patch & vulnerability management|#patching"
+  logging: "§9 Logging & auditing|#logging"
+  monitoring: "§9.3 Monitoring & response|#monitoring"
+  backup: "§10 Backup & recovery|#backup"
+  deploy: "§11 Deployment & change management|#deploy"
+  poam: "§12.2 Residual actions (POA&M)|#poam"
+
+controls:
+
+  # --- 01 governance / assurance --------------------------------------
+  ism-0041:
+    theme: "01-governance"
+    status: customer
+    ref: scope
+    note: "This LLD is a component design intended to be annexed to the system security plan; the SSP and its full control annex remain an organisational artefact."
+  ism-1564:
+    theme: "01-governance"
+    status: partial
+    ref: poam
+    note: "§12.2 is a seeded plan of action and milestones covering every 🟡 and ❌ row in this table; the system owner produces the final POA&M after assessment."
+  ism-1610:
+    theme: "01-governance"
+    status: partial
+    ref: backup
+    note: "Emergency access is console/SSH plus `guac-restore <bundle>` onto a freshly provisioned host; `test/dr.sh` exercises exactly that path. The FIPS task warns not to enable FIPS without console access."
+  ism-1636:
+    theme: "01-governance"
+    status: partial
+    ref: deploy
+    note: "`test/check.sh` (services, HTTPS login page, token auth), `test/dr.sh` (restore) and `test/upgrade.sh` (version bump) run in CI across the OS matrix; independent control assessment is still required."
+  ism-principle-p3:
+    theme: "01-governance"
+    status: implemented
+    ref: apphard
+    note: "Single-purpose host: Tomcat docs/examples/host-manager/manager/ROOT webapps deleted, shutdown port set to -1, filesystem modules blacklisted, inbound limited to 22/80/443, all tiers bound to 127.0.0.1."
+  ism-principle-p4:
+    theme: "01-governance"
+    status: implemented
+    ref: privileged
+    note: "The whole purpose of the component: administration is brokered through one authenticated, MFA-capable, logged and optionally recorded choke point instead of direct RDP/SSH."
+
+  # --- 02 gateway / jump host -----------------------------------------
+  ism-1387:
+    theme: "02-gateway"
+    status: implemented
+    ref: privileged
+    note: "This build *is* the jump server. Administrators authenticate to Guacamole and every RDP/SSH/VNC session to a target is brokered by guacd — no direct administrative path to targets is required."
+  ism-1388:
+    theme: "02-gateway"
+    status: partial
+    ref: net
+    note: "The host originates all target traffic (docs/FIREWALL.md flows O1–O5, scoped per connection); enforcing that *only* the broker may reach targets is a network ACL change, not a host setting."
+  ism-1385:
+    theme: "02-gateway"
+    status: partial
+    ref: net
+    note: "firewalld is default-deny inbound and the design places the host in a dedicated broker zone; egress to package mirrors is expected only during build windows (air-gap uses an internal mirror)."
+  ism-1774:
+    theme: "02-gateway"
+    status: partial
+    ref: net
+    note: "Management is SSH/22 from the Ansible control node or bastion only (flow I3), hardened by /etc/ssh/sshd_config.d/50-guac-hardening.conf; isolating that path is a network-design step."
+  ism-0631:
+    theme: "02-gateway"
+    status: partial
+    ref: arch
+    note: "Guacamole brokers only the connections declared in `guac_connections` (deny-by-default permissions); docs/FIREWALL.md is the authorised-flow matrix the surrounding network must enforce."
+  ism-1192:
+    theme: "02-gateway"
+    status: implemented
+    ref: arch
+    note: "A genuine application-layer protocol break: nginx terminates HTTPS, Tomcat handles the Guacamole protocol, guacd re-originates RDP/SSH/VNC from its own stack. No client packet is forwarded to a target."
+  ism-0619:
+    theme: "02-gateway"
+    status: implemented
+    ref: auth
+    note: "No target session can be opened until the user has authenticated to Guacamole and holds a READ permission on that connection; site.yml verifies token auth on every run."
+  ism-1863:
+    theme: "02-gateway"
+    status: partial
+    ref: net
+    note: "Tomcat 8080 is closed in firewalld when the proxy is enabled, the Tomcat shutdown port is disabled, MariaDB binds loopback/socket only; exposure of 22/443 to the internet is a perimeter decision."
+  ism-1037:
+    theme: "02-gateway"
+    status: partial
+    ref: deploy
+    note: "Every `site.yml` run re-asserts the full configuration and ends with a live login test; a second run reports changed=0. A scheduled OpenSCAP benchmark run is the remaining half (see roles/cis)."
+
+  # --- 03 network -------------------------------------------------------
+  ism-1181:
+    theme: "03-network"
+    status: customer
+    ref: net
+    note: "The design assumes a dedicated broker zone between the client and target zones; creating the zones is a network-design activity outside this playbook."
+  ism-1182:
+    theme: "03-network"
+    status: partial
+    ref: net
+    note: "The host firewall limits ingress to 22/80/443 and closes 8080 behind the proxy; inter-segment enforcement (client→broker, broker→target) must be implemented from docs/FIREWALL.md."
+  ism-1416:
+    theme: "03-network"
+    status: partial
+    ref: net
+    note: "firewalld (RHEL) / ufw (Debian) restrict *inbound* connections to an approved set. Outbound egress filtering is not configured by `guac_manage_firewall` — apply it upstream or extend the zone."
+  ism-1427:
+    theme: "03-network"
+    status: partial
+    ref: hardening
+    note: "`net.ipv4.conf.all/default.rp_filter=1` plus `log_martians=1` give host-level anti-spoofing; ingress filtering at the gateway itself is a network responsibility."
+  ism-0521:
+    theme: "03-network"
+    status: partial
+    ref: net
+    note: "IPv6 is not disabled — nginx listens on [::]:80 and [::]:443. The sysctl set disables IPv6 redirects and source routing. Disable IPv6 in the OS build if it is genuinely unused."
+  ism-1006:
+    theme: "03-network"
+    status: partial
+    ref: net
+    note: "Management traffic is SSH only, with curated ciphers/KEX/MACs, root login denied and (at L2) TCP/agent forwarding disabled; restricting the source of that traffic is a network control."
+  ism-1479:
+    theme: "03-network"
+    status: partial
+    ref: arch
+    note: "All inter-tier traffic (nginx→Tomcat→guacd→MariaDB) stays on 127.0.0.1; the only server-to-server flows leaving the host are DNS, NTP, the SIEM, optional LDAP/Duo and the brokered target sessions."
+  ism-0385:
+    theme: "03-network"
+    status: partial
+    ref: arch
+    note: "The host is single-purpose and self-contained (local MariaDB by default), so it operates independently of other servers; with `guac_install_mariadb: false` it depends on the nominated DB server."
+
+  # --- 04 operating system ---------------------------------------------
+  ism-1409:
+    theme: "04-os"
+    status: partial
+    ref: hardening
+    note: "roles/hardening applies a CIS-aligned baseline (sysctl, module blacklist, core dumps, login.defs, file modes, cron/at restriction, ctrl-alt-del masked, SELinux left enforcing). Full CIS L2 + OpenSCAP is roles/cis."
+  ism-1501:
+    theme: "04-os"
+    status: implemented
+    ref: osbuild
+    note: "site.yml asserts a supported platform before any role runs (RHEL family major 9/10, or Debian family) and fails the play otherwise, so the build cannot land on an out-of-support major."
+  ism-1407:
+    theme: "04-os"
+    status: partial
+    ref: osbuild
+    note: "The supported matrix is RHEL/Oracle/Rocky/Alma 9–10, Debian 12–13, Ubuntu 22.04/24.04/26.04 — current or previous release. Tracking minor-release currency is an operational task."
+  ism-0380:
+    theme: "04-os"
+    status: partial
+    ref: hardening
+    note: "Unused filesystem modules (cramfs, freevxfs, jffs2, hfs, hfsplus, squashfs, udf) and usb-storage at L2 are blacklisted, ctrl-alt-del is masked and core dumps disabled; base-image service minimisation is the SOE's job."
+  ism-0383:
+    theme: "04-os"
+    status: partial
+    ref: hardening
+    note: "guacd/tomcat/nginx run as system accounts with /sbin/nologin and locked passwords; the Guacamole `guacadmin` default is flagged for mandatory change at first login but is not force-rotated by the playbook."
+  ism-1492:
+    theme: "04-os"
+    status: partial
+    ref: hardening
+    note: "The Linux equivalents are set: `kernel.randomize_va_space=2` (ASLR), `kptr_restrict=2`, `dmesg_restrict=1`, `yama.ptrace_scope=1`, `fs.suid_dumpable=0`, `protected_hardlinks/symlinks=1`."
+  ism-1584:
+    theme: "04-os"
+    status: partial
+    ref: hardening
+    note: "Unprivileged users cannot alter security functionality: shadow/gshadow 0000, sshd_config 0600, crontab 0600, cron.allow/at.allow restrict scheduling to root, SELinux stays enforcing, auditd watches the config paths."
+  ism-1592:
+    theme: "04-os"
+    status: partial
+    ref: hardening
+    note: "Package installation requires root and service accounts are nologin, so unprivileged users cannot install software; there is no execution allow-listing (fapolicyd) to stop a user running a downloaded binary."
+  ism-0343:
+    theme: "04-os"
+    status: implemented
+    ref: hardening
+    note: "At `guac_hardening_level: l2` the usb-storage module is blacklisted via /etc/modprobe.d/90-guac-hardening.conf (`install usb-storage /bin/false`), removing write access to removable media."
+  ism-1418:
+    theme: "04-os"
+    status: implemented
+    ref: hardening
+    note: "Same control: the usb-storage blacklist at L2 removes read access to removable media on a host that has no business requirement for it."
+  ism-1745:
+    theme: "04-os"
+    status: not-addressed
+    ref: osbuild
+    note: "Secure Boot / Measured Boot are firmware-and-image properties set at OS install; this playbook neither enables nor verifies them. Confirm at build time and record the result."
+  ism-1417:
+    theme: "04-os"
+    status: not-addressed
+    ref: hardening
+    note: "No antivirus/EDR agent is installed by this build. Deploy the organisation's server agent alongside it — the playbook does not conflict with one."
+  ism-1034:
+    theme: "04-os"
+    status: not-addressed
+    ref: hardening
+    note: "No HIPS is deployed. SELinux is left enforcing (mandatory access control) and auditd is installed, but neither is a host-based intrusion prevention system."
+
+  # --- 05 server applications ------------------------------------------
+  ism-1246:
+    theme: "05-server-apps"
+    status: partial
+    ref: apphard
+    note: "A curated subset of vendor guidance is applied: Tomcat shutdown port disabled and ErrorReportValve locked down, nginx `server_tokens off` plus security headers, MariaDB secure-installation equivalent. Not a full vendor benchmark pass."
+  ism-1247:
+    theme: "05-server-apps"
+    status: implemented
+    ref: apphard
+    note: "Tomcat docs/examples/host-manager/manager/ROOT webapps are deleted and the shutdown port set to -1; MariaDB anonymous users and the `test` database are removed; extension jars for disabled features are pruned on every run."
+  ism-1249:
+    theme: "05-server-apps"
+    status: implemented
+    ref: apphard
+    note: "guacd runs as the dedicated `guacd` system account, Tomcat as `tomcat`, nginx as its packaged user — all system accounts, /sbin/nologin, password-locked, and guacd is additionally denied cron."
+  ism-1250:
+    theme: "05-server-apps"
+    status: partial
+    ref: guacd
+    note: "guacd.service sets NoNewPrivileges=true, ProtectSystem=full and a private RuntimeDirectory, with a 0700 home for FreeRDP certificate state. tomcat.service carries no equivalent sandboxing directives yet."
+  ism-1260:
+    theme: "05-server-apps"
+    status: partial
+    ref: auth
+    note: "Tomcat ships no default users (the manager webapps are removed), MariaDB anonymous accounts are deleted and root is unix_socket-only locally; the Guacamole `guacadmin`/`guacadmin` default must be changed by the operator."
+  ism-1263:
+    theme: "05-server-apps"
+    status: partial
+    ref: privileged
+    note: "Application administration is separate from OS administration: Guacamole admins hold ADMINISTER in the app, the DB account holds DML on one schema only, and host administration is a named sudo account."
+  ism-1245:
+    theme: "05-server-apps"
+    status: partial
+    ref: guacd
+    note: "guacd is compiled on the host, so the source tree and build toolchain remain under /usr/local/src/guacamole after install. The container variant drops them; on a VM, decide whether to remove them post-build."
+  ism-1483:
+    theme: "05-server-apps"
+    status: partial
+    ref: patching
+    note: "Versions are pinned in group_vars (`guac_version`, `guac_tomcat_version`, `guac_mysql_connector_j_version`) and a bump plus one re-run performs the upgrade; tracking upstream releases is an operational task."
+  ism-1704:
+    theme: "05-server-apps"
+    status: partial
+    ref: patching
+    note: "The upgrade path removes the superseded war, the exploded webapp, the Tomcat work cache and stale-version extension jars, so an unsupported Guacamole build cannot be left loadable on disk."
+  ism-0304:
+    theme: "05-server-apps"
+    status: partial
+    ref: patching
+    note: "Superseded Guacamole artefacts are pruned automatically on a version bump; deciding that a component has reached vendor end-of-support, and removing it, remains an operational judgement."
+
+  # --- 06 web application -----------------------------------------------
+  ism-1424:
+    theme: "06-web"
+    status: implemented
+    ref: web
+    note: "nginx adds Content-Security-Policy (`guac_proxy_csp`), Strict-Transport-Security (2 years, includeSubDomains) and X-Frame-Options SAMEORIGIN on every response, plus nosniff, Referrer-Policy and Permissions-Policy."
+  ism-1552:
+    theme: "06-web"
+    status: implemented
+    ref: web
+    note: "Port 80 serves only `return 301 https://$host$request_uri`; all Guacamole content and the WebSocket tunnel are served from the TLS 1.3 vhost."
+  ism-1536:
+    theme: "06-web"
+    status: partial
+    ref: web
+    note: "nginx access and error logs record requests, denied access and errors, with the real client IP restored by Tomcat's RemoteIpValve; Tomcat/Guacamole log auth failures. Central storage needs `guac_syslog_target`."
+  ism-1278:
+    theme: "06-web"
+    status: implemented
+    ref: web
+    note: "Tomcat's ErrorReportValve runs with showReport=false and showServerInfo=false, and nginx sets `server_tokens off`, so neither stack traces nor version/schema detail reach the browser."
+  ism-1817:
+    theme: "06-web"
+    status: implemented
+    ref: webapp
+    note: "Guacamole's REST API requires an auth token for every call; the roles/connections reconcile module obtains one via /api/tokens and all object reads are permission-filtered per user."
+  ism-1818:
+    theme: "06-web"
+    status: implemented
+    ref: webapp
+    note: "The same token plus the user's system/object permissions gate every mutating API call — creating connections or users requires ADMINISTER or an explicit CREATE_* permission."
+
+  # --- 07 database -------------------------------------------------------
+  ism-1269:
+    theme: "07-database"
+    status: partial
+    ref: db
+    note: "`guac_install_mariadb: false` plus `guac_mysql_host` places the database on a separate server; the single-host default deliberately co-locates them for a small deployment."
+  ism-1270:
+    theme: "07-database"
+    status: customer
+    ref: db
+    note: "When a remote database is used, placing it on a server segment (never a user segment) is a network-design decision; the playbook only needs TCP 3306 reachability from the broker."
+  ism-1271:
+    theme: "07-database"
+    status: partial
+    ref: db
+    note: "The only client of the database is this host; restrict the DB listener to the broker's address (flow O6 in docs/FIREWALL.md). Locally the listener is not exposed at all."
+  ism-1272:
+    theme: "07-database"
+    status: implemented
+    ref: db
+    note: "The default local deployment reaches MariaDB over the UNIX socket / 127.0.0.1 only — JDBC traffic never touches a routable interface, and 3306 is not opened in firewalld."
+  ism-1277:
+    theme: "07-database"
+    status: partial
+    ref: db
+    note: "Local traffic is loopback-only, so no network encryption applies. For a remote database, enable TLS at the DBMS and add `mysql-ssl-mode`/`mysql-ssl-*` to guacamole.properties — not automated here."
+  ism-1255:
+    theme: "07-database"
+    status: implemented
+    ref: db
+    note: "`guacamole_user` is granted SELECT, INSERT, UPDATE, DELETE on `guacamole_db.*` and nothing else — no DDL, no access to other schemas, no administrative privileges."
+  ism-1256:
+    theme: "07-database"
+    status: partial
+    ref: db
+    note: "The MariaDB data directory keeps the distribution's packaged ownership and mode (mysql:mysql, 0750); guacamole.properties, which holds the DB password, is 0640 root:tomcat. The datadir mode is not asserted by the playbook."
+  ism-1268:
+    theme: "07-database"
+    status: partial
+    ref: access
+    note: "Need-to-know is enforced at the application layer — Guacamole grants per-connection/per-group READ permissions and shows a user nothing else. Database-level roles and views are not used."
+  ism-1276:
+    theme: "07-database"
+    status: partial
+    ref: db
+    note: "All database interaction is upstream Guacamole's JDBC extension, which uses MyBatis prepared statements; this is an upstream property the build inherits, not something configured here."
+  ism-1537:
+    theme: "07-database"
+    status: partial
+    ref: db
+    note: "Guacamole logs user, permission and connection changes at the application layer, but the MariaDB audit plugin / general log is NOT enabled by this build — turn on server_audit if DB-level event logging is in scope."
+  ism-1758:
+    theme: "07-database"
+    status: partial
+    ref: db
+    note: "MariaDB error (and any enabled general/slow) logs are forwarded by rsyslog once `guac_syslog_target` is set; until then they stay under /var/log/mariadb."
+  ism-1853:
+    theme: "07-database"
+    status: partial
+    ref: db
+    note: "The application account holds DML only; MariaDB root is reachable locally via unix_socket authentication with no stored password, so privileged DB access requires root on the host."
+
+  # --- 08 cryptography ---------------------------------------------------
+  ism-1139:
+    theme: "08-crypto"
+    status: implemented
+    ref: crypto
+    note: "`ssl_protocols TLSv1.3` only (`guac_proxy_ssl_protocols`) — TLS 1.2 and below are not offered at all, so there is no version-downgrade path."
+  ism-1369:
+    theme: "08-crypto"
+    status: implemented
+    ref: crypto
+    note: "TLS 1.3's cipher suite set is AEAD-only: AES-128/256-GCM and ChaCha20-Poly1305. No CBC or stream suites can be negotiated."
+  ism-1370:
+    theme: "08-crypto"
+    status: implemented
+    ref: crypto
+    note: "TLS 1.3 removes renegotiation from the protocol entirely; post-handshake key update is server- or client-initiated within the established, authenticated session."
+  ism-1374:
+    theme: "08-crypto"
+    status: implemented
+    ref: crypto
+    note: "Self-signed certificates are generated by `openssl req -x509` with the OpenSSL default SHA-256 signature; Let's Encrypt (`guac_tls_mode: letsencrypt`) also issues SHA-256."
+  ism-1375:
+    theme: "08-crypto"
+    status: implemented
+    ref: crypto
+    note: "TLS 1.3 derives all traffic keys with HKDF over SHA-256 or SHA-384 (bound to the negotiated suite) and has no separate MAC — SHA-1 based PRFs are not reachable."
+  ism-1448:
+    theme: "08-crypto"
+    status: implemented
+    ref: crypto
+    note: "TLS 1.3 mandates ephemeral (EC)DHE key establishment; static DH/ECDH key exchange was removed from the protocol."
+  ism-1453:
+    theme: "08-crypto"
+    status: implemented
+    ref: crypto
+    note: "A direct consequence of ephemeral-only key establishment: every TLS 1.3 session to the proxy has perfect forward secrecy. `ssl_session_tickets off` also prevents ticket-key reuse across restarts."
+  ism-1553:
+    theme: "08-crypto"
+    status: implemented
+    ref: crypto
+    note: "TLS 1.3 removed protocol-level compression (the CRIME mitigation); nginx enables no TLS compression of its own."
+  ism-0476:
+    theme: "08-crypto"
+    status: implemented
+    ref: crypto
+    note: "`guac_cert_rsa_keylength` defaults to 3072, the preferred modulus rather than the 2048-bit minimum, for the proxy certificate."
+  ism-1765:
+    theme: "08-crypto"
+    status: partial
+    ref: crypto
+    note: "The proxy certificate is RSA-3072 by default, but the optional internal guacd certificate (`guac_guacd_tls_enabled`) is generated at rsa:2048 in roles/hardening/tasks/app_layer.yml — loopback-only, but raise it if 3072 is required everywhere."
+  ism-1446:
+    theme: "08-crypto"
+    status: partial
+    ref: fips
+    note: "Under `guac_fips_enabled` the platform crypto policy restricts TLS to FIPS 186 curves (P-256/P-384/P-521). Outside FIPS mode OpenSSL's default group list leads with X25519, which is not a FIPS 186 curve."
+  ism-1761:
+    theme: "08-crypto"
+    status: partial
+    ref: crypto
+    note: "P-256 and P-384 are offered, but X25519 is preferred by OpenSSL's default TLS 1.3 group order. Set `ssl_ecdh_curve` (or enable FIPS mode) if your profile requires NIST curves exclusively."
+  ism-1769:
+    theme: "08-crypto"
+    status: implemented
+    ref: crypto
+    note: "AES-256 is used where the build chooses: backup bundles are `gpg -c --cipher-algo AES256`, SSH leads with aes256-gcm. TLS 1.3 may still negotiate TLS_AES_128_GCM_SHA256 — constrain the crypto policy if AES-192+ is mandated."
+  ism-0469:
+    theme: "08-crypto"
+    status: partial
+    ref: crypto
+    note: "Client→broker is TLS 1.3, broker→SIEM is TLS/RELP-TLS, broker→AD is LDAPS. Broker→target depends on the protocol: RDP can use TLS/NLA, SSH is encrypted, but VNC and telnet are not — scope those connections accordingly."
+  ism-1781:
+    theme: "08-crypto"
+    status: partial
+    ref: crypto
+    note: "Honest gap: the guacd↔Tomcat link is plaintext on loopback unless `guac_guacd_tls_enabled` is set, and VNC/telnet target sessions carry no transport encryption of their own."
+  ism-0459:
+    theme: "08-crypto"
+    status: customer
+    ref: osbuild
+    note: "Full disk encryption is an OS-install / platform decision (LUKS, or the hypervisor's storage encryption) — this playbook neither configures nor verifies it. The database and its credentials sit on that disk."
+  ism-1324:
+    theme: "08-crypto"
+    status: partial
+    ref: crypto
+    note: "Production should use `guac_tls_mode: letsencrypt` or a certificate from an internal/evaluated CA; the built-in self-signed mode exists for lab use or where another terminator fronts the service."
+  ism-1327:
+    theme: "08-crypto"
+    status: partial
+    ref: crypto
+    note: "Private keys are 0640 root:root under /etc/nginx/ssl/private (guacd keys 0640 guacd:guacd), so logical access control is in place — but the key files themselves are not passphrase-encrypted and no HSM is used."
+  ism-0465:
+    theme: "08-crypto"
+    status: partial
+    ref: fips
+    note: "`guac_fips_enabled: true` runs `fips-mode-setup --enable`, selecting the platform's FIPS 140 validated modules (kernel, OpenSSL, GnuTLS, NSS). Off by default; needs a reboot; confirm the JVM's provider separately."
+
+  # --- 09 secure shell ---------------------------------------------------
+  ism-0484:
+    theme: "09-ssh"
+    status: partial
+    ref: hardening
+    note: "The drop-in sets LoginGraceTime 60, Banner /etc/issue.net, HostbasedAuthentication no, IgnoreRhosts yes, PermitRootLogin no, PermitEmptyPasswords no, X11Forwarding no and (at L2) AllowTcpForwarding no. Not set: ListenAddress, GatewayPorts no."
+  ism-0485:
+    theme: "09-ssh"
+    status: partial
+    ref: hardening
+    note: "Key-only SSH is one variable: `guac_hardening_ssh_password_auth: false` writes PasswordAuthentication no and KbdInteractiveAuthentication no. The default leaves password auth enabled so a build cannot lock itself out."
+  ism-0487:
+    theme: "09-ssh"
+    status: implemented
+    ref: hardening
+    note: "At `guac_hardening_level: l2` the drop-in sets AllowTcpForwarding no, AllowAgentForwarding no and X11Forwarding no, so a passphrase-less key cannot be used to tunnel or forward credentials."
+  ism-0489:
+    theme: "09-ssh"
+    status: partial
+    ref: hardening
+    note: "AllowAgentForwarding no at L2 stops agent credentials being forwarded into this host; the cache expiry policy on the administrator's own workstation is outside this build."
+  ism-1506:
+    theme: "09-ssh"
+    status: implemented
+    ref: hardening
+    note: "Every supported platform ships OpenSSH 8.x/9.x, which has no SSH-1 implementation to enable; the curated Ciphers/KexAlgorithms/MACs lists are SSH-2 only."
+  ism-1449:
+    theme: "09-ssh"
+    status: customer
+    ref: hardening
+    note: "The host never holds an administrator's SSH private key — keys live on the control node or the administrator's workstation, where passphrase protection is enforced by process."
+
+  # --- 10 identity and authentication -----------------------------------
+  ism-1546:
+    theme: "10-identity"
+    status: implemented
+    ref: auth
+    note: "Guacamole authenticates every user before any resource is visible; site.yml's final smoke test proves the auth path works by requesting an API token on every run."
+  ism-0414:
+    theme: "10-identity"
+    status: partial
+    ref: auth
+    note: "Each person gets their own Guacamole account (`guac_users`) or a directory/SSO identity; connection history, recordings and nginx logs attribute every session to that identity."
+  ism-0415:
+    theme: "10-identity"
+    status: partial
+    ref: auth
+    note: "Target-host credentials stored in a connection are effectively shared, but the *person* remains uniquely identified: Guacamole records who opened which connection, and `guac_histrec_enabled` records the session itself."
+  ism-0974:
+    theme: "10-identity"
+    status: partial
+    ref: auth
+    note: "`guac_totp_enabled` or `guac_duo_enabled` adds a second factor for all users; both are off by default and must be enabled per deployment. SSO (OIDC/SAML/CAS) can instead delegate MFA to the IdP."
+  ism-1173:
+    theme: "10-identity"
+    status: partial
+    ref: auth
+    note: "The same TOTP/Duo extension applies to administrative Guacamole users — Guacamole has no way to exempt an account from an installed MFA extension."
+  ism-1504:
+    theme: "10-identity"
+    status: partial
+    ref: auth
+    note: "For an internet-facing deployment, enable TOTP/Duo, or front the service with an IdP via `guac_openid_enabled` / `guac_saml_enabled` and enforce MFA there."
+  ism-1505:
+    theme: "10-identity"
+    status: partial
+    ref: auth
+    note: "Guacamole is the access path to the target estate, so MFA at the broker gates access to everything behind it — provided one of the MFA/SSO toggles is enabled."
+  ism-1401:
+    theme: "10-identity"
+    status: partial
+    ref: auth
+    note: "TOTP (something you have, in an enrolled authenticator) or Duo push combines with the memorised secret; `guac_ssl_auth_enabled` gives a certificate/smart-card factor instead."
+  ism-1682:
+    theme: "10-identity"
+    status: partial
+    ref: auth
+    note: "TOTP is not phishing-resistant. Phishing-resistant paths exist in this build: `guac_ssl_auth_enabled` (X.509 client certificate / smart card) or OIDC/SAML to an IdP enforcing WebAuthn/FIDO2."
+  ism-1402:
+    theme: "10-identity"
+    status: partial
+    ref: auth
+    note: "Guacamole stores per-user password hashes salted with SHA-256 (upstream schema) — salted and hashed, but not stretched. Target-host credentials in connection parameters are stored recoverable; see ism-0418."
+  ism-0418:
+    theme: "10-identity"
+    status: partial
+    ref: auth
+    note: "Inherent to credential brokering: target credentials live in the Guacamole database on the broker. Mitigated by loopback-only DB, 0640 guacamole.properties and encrypted backups; avoid it with RDP/SSH credential pass-through or per-user prompting."
+  ism-1595:
+    theme: "10-identity"
+    status: partial
+    ref: auth
+    note: "Guacamole supports an 'expired' password attribute that forces a change at next login, and the default `guacadmin` credential is documented as change-on-first-login; the playbook does not set the flag for you."
+  ism-0421:
+    theme: "10-identity"
+    status: customer
+    ref: auth
+    note: "Guacamole core enforces no passphrase length or composition policy. Enforce it at the directory/IdP (LDAP, OIDC, SAML) or accept the risk and record where the policy is applied."
+  ism-1403:
+    theme: "10-identity"
+    status: not-addressed
+    ref: auth
+    note: "Neither Guacamole nor this playbook implements lockout: pam_faillock is not configured (auditd only watches /var/run/faillock) and Guacamole core has no lockout. Add fail2ban against the Guacamole auth log — see roles/cis for PAM faillock."
+  ism-1685:
+    theme: "10-identity"
+    status: partial
+    ref: auth
+    note: "guacd/tomcat are password-locked system accounts with no usable credential at all, and DB/LDAP/Duo/SSO secrets are supplied per deployment through Ansible Vault. The shipped `ChangeMe_*` defaults in group_vars must be overridden."
+  ism-1603:
+    theme: "10-identity"
+    status: partial
+    ref: auth
+    note: "Host-based and rhosts SSH authentication are disabled; SAML runs with `saml-strict: true` (signature validation) and OIDC validates the nonce against `openid-max-nonce-validity`; TOTP codes are single-use within their window."
+
+  # --- 11 access control -------------------------------------------------
+  ism-1852:
+    theme: "11-access"
+    status: implemented
+    ref: access
+    note: "Guacamole is deny-by-default: a user sees only connections and groups they hold a READ permission on, granted explicitly through `guac_users` / `guac_user_groups`."
+  ism-principle-p11:
+    theme: "11-access"
+    status: partial
+    ref: access
+    note: "Least privilege is applied throughout: per-connection permissions, DML-only DB account, nologin service accounts, sudo-only host administration. Deciding each person's minimum set is an IDAM activity."
+  ism-0407:
+    theme: "11-access"
+    status: partial
+    ref: access
+    note: "`guac_users` / `guac_user_groups` in version control is an auditable record of who holds what access and when it changed (git history); authoriser, grant date and review dates belong in the IDAM register."
+  ism-0408:
+    theme: "11-access"
+    status: partial
+    ref: access
+    note: "The SSH drop-in sets `Banner /etc/issue.net`, but this playbook does not write the banner text — supply your approved wording. Guacamole's login page has no banner facility."
+  ism-0428:
+    theme: "11-access"
+    status: partial
+    ref: access
+    note: "`guac_session_timeout_minutes` (default 15) sets `api-session-timeout`, terminating an idle web session inside the 15-minute limit. OS console/screen lock does not apply to a headless server."
+  ism-0853:
+    theme: "11-access"
+    status: partial
+    ref: access
+    note: "Idle Guacamole sessions are terminated by `api-session-timeout`; scheduled daily session termination and host restart are not implemented and would be an operational job if required."
+  ism-0430:
+    theme: "11-access"
+    status: customer
+    ref: auth
+    note: "With LDAP or SSO enabled, disabling the directory account removes access immediately. For database-only auth, remove the user from `guac_users` and re-run with `guac_connections_prune: true`."
+  ism-1404:
+    theme: "11-access"
+    status: customer
+    ref: access
+    note: "Guacamole supports per-user disabled/valid-until attributes, but nothing in this build automatically disables an account after 45 days of inactivity — drive it from the IdP or an operational review."
+  ism-0432:
+    theme: "11-access"
+    status: partial
+    ref: access
+    note: "§6.1 and the declarative `guac_users`/`guac_user_groups`/`guac_connections` data document the access model for this component; the system security plan carries the authoritative statement."
+
+  # --- 12 privileged access ---------------------------------------------
+  ism-1507:
+    theme: "12-privileged"
+    status: customer
+    ref: privileged
+    note: "Granting ADMINISTER or CREATE_* in `guac_user_groups` is an explicit, peer-reviewed change in version control — the validation of the request itself is an IDAM process."
+  ism-1508:
+    theme: "12-privileged"
+    status: partial
+    ref: privileged
+    note: "System permissions are granted individually (no implicit admin), service accounts hold none, and the DB account cannot alter schema. Reviewing that each admin still needs their grant is operational."
+  ism-1689:
+    theme: "12-privileged"
+    status: partial
+    ref: privileged
+    note: "The guacd and tomcat accounts cannot log on at all (/sbin/nologin, password-locked, cron-denied); host administration is a named sudo account over hardened SSH."
+  ism-1688:
+    theme: "12-privileged"
+    status: partial
+    ref: privileged
+    note: "An unprivileged Guacamole user cannot reach an administrative connection they hold no permission on, and cannot log on to the host itself — only nominated administrators have SSH access."
+  ism-1653:
+    theme: "12-privileged"
+    status: partial
+    ref: privileged
+    note: "guacd and tomcat are unprivileged, shell-less accounts with no outbound requirement beyond the brokered target sessions; host egress is limited by firewall policy and, in an air-gapped build, to an internal mirror."
+  ism-1509:
+    theme: "12-privileged"
+    status: implemented
+    ref: logging
+    note: "The auditd ruleset logs privilege escalation directly: `-a always,exit -F arch=b64 -C euid!=uid -F auid!=unset -S execve -k privileged` plus `-w /usr/bin/sudo -p x -k priv-cmd`."
+  ism-1650:
+    theme: "12-privileged"
+    status: implemented
+    ref: logging
+    note: "auditd watches /etc/passwd, /etc/group, /etc/shadow and /etc/gshadow (`-k identity`) and /etc/sudoers plus /etc/sudoers.d/ (`-k scope`), capturing account and privileged-group changes."
+  ism-1649:
+    theme: "12-privileged"
+    status: not-addressed
+    ref: privileged
+    note: "Access is standing, not just-in-time: a user with a READ permission can open that connection at any time. Time-bound elevation needs a PAM platform in front, or scripted grant/revoke against the Guacamole API."
+
+  # --- 13 event logging --------------------------------------------------
+  ism-0580:
+    theme: "13-logging"
+    status: customer
+    ref: logging
+    note: "The build implements an event-logging *configuration* (auditd ruleset, rsyslog forwarding, application logs); the governing policy document is an organisational artefact."
+  ism-0582:
+    theme: "13-logging"
+    status: implemented
+    ref: logging
+    note: "auditd plus journald cover the listed events: logons/logoffs and lockouts (/var/log/lastlog, /var/run/faillock), security policy and configuration changes (/etc/selinux, sshd_config, /etc/guacamole), service state and system start/stop."
+  ism-0585:
+    theme: "13-logging"
+    status: implemented
+    ref: logging
+    note: "auditd records date/time, auid/uid, the object or filename, the syscall and key, and the host, for every rule in the deployed ruleset; nginx logs timestamp, client IP, request and status."
+  ism-1405:
+    theme: "13-logging"
+    status: partial
+    ref: logging
+    note: "With `guac_syslog_target` set, rsyslog forwards continuously with a 50,000-entry linked-list queue and infinite resume retries, and audisp pushes auditd events into the same stream. The facility itself is the SIEM."
+  ism-1747:
+    theme: "13-logging"
+    status: partial
+    ref: logging
+    note: "OS and auditd logs reach the collector once `guac_syslog_target` is set (rsyslog omfwd/omrelp + audisp syslog plugin). Until then, logs are local only."
+  ism-1757:
+    theme: "13-logging"
+    status: partial
+    ref: logging
+    note: "nginx and Tomcat/Guacamole logs are forwarded by the same rsyslog configuration once `guac_syslog_target` is set."
+  ism-1651:
+    theme: "13-logging"
+    status: partial
+    ref: logging
+    note: "Privileged-access events are captured by auditd and reach the SIEM through the audisp→rsyslog→collector path; that path is only active when `guac_syslog_target` is configured."
+  ism-1652:
+    theme: "13-logging"
+    status: partial
+    ref: logging
+    note: "The identity/scope auditd rules (account and group management) travel over the same forwarding path, so they land centrally whenever forwarding is enabled."
+  ism-1714:
+    theme: "13-logging"
+    status: partial
+    ref: logging
+    note: "Unprivileged access events — Guacamole logins and connection history, nginx access logs, OS logons — forward centrally under the same `guac_syslog_target` condition."
+  ism-1566:
+    theme: "13-logging"
+    status: implemented
+    ref: logging
+    note: "Guacamole records a history entry per login and per connection (user, connection, start/end), nginx logs every request with the real client IP, and auditd logs OS logons."
+  ism-1683:
+    theme: "13-logging"
+    status: partial
+    ref: logging
+    note: "The TOTP/Duo extensions log successful and failed second-factor attempts through Tomcat's logger alongside the primary authentication result; retention and alerting are the SIEM's."
+  ism-1815:
+    theme: "13-logging"
+    status: partial
+    ref: logging
+    note: "In transit, `guac_syslog_tls` wraps forwarding in TLS with collector CA validation and optional mutual-TLS client certificates, and `guac_syslog_relp` makes delivery reliable. Protection at rest is the SIEM's control."
+  ism-0859:
+    theme: "13-logging"
+    status: customer
+    ref: logging
+    note: "Locally, logs rotate on distribution defaults — nowhere near seven years. Authoritative retention is the central facility's; forward early so the host is not the system of record."
+  ism-0988:
+    theme: "13-logging"
+    status: implemented
+    ref: logging
+    note: "`guac_hardening_time_sync` installs and enables chrony against `guac_hardening_ntp_servers` (or the distro pool), and the database runs in UTC (`guac_db_timezone`), so timestamps correlate across sources."
+  ism-0109:
+    theme: "13-logging"
+    status: customer
+    ref: monitoring
+    note: "The build produces the telemetry (auditd, nginx, Tomcat/Guacamole, guacd, MariaDB) and ships it; timely analysis is a SOC/SIEM function."
+  ism-1228:
+    theme: "13-logging"
+    status: customer
+    ref: monitoring
+    note: "Candidate use cases from this host: failed admin logons, auditd privilege events, nginx 4xx/5xx spikes, unexpected guacd connection patterns. Triage to incident is the SOC's."
+
+  # --- 14 patching and vulnerabilities -----------------------------------
+  ism-1143:
+    theme: "14-patching"
+    status: customer
+    ref: patching
+    note: "The playbook is the patch *mechanism* — one idempotent re-run patches the OS and rolls Guacamole/Tomcat forward. The documented process, cadence and approvals are organisational."
+  ism-0298:
+    theme: "14-patching"
+    status: partial
+    ref: patching
+    note: "Ansible gives the centralised managed approach and every run ends by verifying the web app answers 200 and guacadmin can authenticate. Caveat: the EPEL and RPM Fusion release RPMs are installed with `disable_gpg_check: true`."
+  ism-1690:
+    theme: "14-patching"
+    status: partial
+    ref: patching
+    note: "For the internet-facing service itself (nginx, Tomcat, Guacamole) a version bump plus one re-run is the patch action; meeting the two-week / 48-hour windows is an operational SLA."
+  ism-1694:
+    theme: "14-patching"
+    status: partial
+    ref: patching
+    note: "`guac_auto_patch: true` installs dnf-automatic with `upgrade_type = security` and `apply_updates = yes` (unattended-upgrades on Debian) and enables the timer; it is off by default for change-control reasons."
+  ism-1695:
+    theme: "14-patching"
+    status: partial
+    ref: patching
+    note: "Same mechanism as ism-1694 for the general server OS; every `site.yml` run also refreshes package metadata so a manual patch run is a single command."
+  ism-1698:
+    theme: "14-patching"
+    status: customer
+    ref: patching
+    note: "No vulnerability scanner is installed or scheduled by this build. Point your existing credentialed scanner at the host and feed findings into the patch cycle."
+  ism-1493:
+    theme: "14-patching"
+    status: partial
+    ref: deploy
+    note: "group_vars/all.yml pins every component version, and the host records what is actually installed in `/usr/local/.guacd_build_id`, `/etc/guacamole/.guac_schema_version` and each backup MANIFEST."
+  ism-1643:
+    theme: "14-patching"
+    status: partial
+    ref: deploy
+    note: "Those same markers plus git history give the version and change history for the Guacamole stack; OS package patch history comes from the dnf/apt database, not from this repo."
+
+  # --- 15 backup and restoration -----------------------------------------
+  ism-1511:
+    theme: "15-backup"
+    status: implemented
+    ref: backup
+    note: "`guac-backup` runs on a systemd timer (`guac_backup_schedule_oncalendar`, default 00:30 daily) and bundles the database dump, /etc/guacamole and the nginx TLS/site config; `guac_backup_retention_days` prunes."
+  ism-1547:
+    theme: "15-backup"
+    status: partial
+    ref: backup
+    note: "The backup process is codified in `guac-backup` and documented in docs/OPERATIONS.md; the organisational data backup policy that governs it sits outside this repository."
+  ism-1548:
+    theme: "15-backup"
+    status: partial
+    ref: backup
+    note: "`guac-restore <bundle>` performs the full restore — stop services, overlay config, reload the database, restore TLS, restart, wait for HTTP 200 — and docs/OPERATIONS.md is the runbook."
+  ism-1810:
+    theme: "15-backup"
+    status: implemented
+    ref: backup
+    note: "One bundle is one point in time: a `--single-transaction` database dump plus the configuration and TLS material are captured together, so a restore never mixes eras."
+  ism-1515:
+    theme: "15-backup"
+    status: implemented
+    ref: backup
+    note: "`test/dr.sh` is an automated DR exercise: build host A, back up, restore onto a fresh host B, then verify guacadmin login and that connection data survived."
+  ism-1811:
+    theme: "15-backup"
+    status: partial
+    ref: backup
+    note: "Bundles carry per-file SHA-256 plus a bundle-level `.sha256`, and `guac_backup_gpg_passphrase` encrypts them with AES-256. Resilience needs an off-host copy — store the passphrase separately or the bundles are unrecoverable."
+  ism-1812:
+    theme: "15-backup"
+    status: implemented
+    ref: backup
+    note: "/var/backups/guacamole is 0700 root:root and the scripts run with `umask 077`, so no unprivileged account can read another account's backup."
+  ism-1813:
+    theme: "15-backup"
+    status: implemented
+    ref: backup
+    note: "The same 0700 root-only directory means unprivileged accounts cannot read backups at all, including any of their own data within them."
+  ism-1814:
+    theme: "15-backup"
+    status: implemented
+    ref: backup
+    note: "Write access to the bundle directory, the `guac-backup`/`guac-restore` scripts (0700 root) and the systemd timer all require root."
+  ism-1705:
+    theme: "15-backup"
+    status: partial
+    ref: backup
+    note: "On-host, root can read every bundle — separation between a backup administrator and other privileged accounts only becomes real once bundles are copied to a backup system with its own account model."
+  ism-1706:
+    theme: "15-backup"
+    status: partial
+    ref: backup
+    note: "Same limitation: a local root-held backup is readable by that account. Shipping bundles to a system where the broker holds write-only credentials is the fix."
+  ism-1707:
+    theme: "15-backup"
+    status: partial
+    ref: backup
+    note: "`guac-backup` only deletes bundles older than the retention window, but nothing prevents root deleting one early. Object-lock or write-once storage is required to satisfy this properly."
+  ism-1708:
+    theme: "15-backup"
+    status: not-addressed
+    ref: backup
+    note: "No mechanism here can prevent the backup administrator modifying or deleting bundles inside the retention period; that requires immutable storage (S3 Object Lock, WORM appliance or offline media)."
+  ism-principle-p9:
+    theme: "15-backup"
+    status: implemented
+    ref: backup
+    note: "Data (database), application configuration (/etc/guacamole, extensions, lib) and TLS material are backed up on a schedule, checksummed, optionally encrypted, and the restore is proven by test/dr.sh."
+  ism-principle-r3:
+    theme: "15-backup"
+    status: customer
+    ref: backup
+    note: "`guac-restore` plus the docs/OPERATIONS.md runbook are the enactment mechanism; the business continuity and disaster recovery plans themselves are organisational documents."
+
+  # --- 16 supply chain / build integrity ---------------------------------
+  ism-1791:
+    theme: "16-supply"
+    status: partial
+    ref: deploy
+    note: "Artefacts are fetched over HTTPS from the Apache CDN with an archive.apache.org fallback and Maven Central, but the playbook does NOT verify their GPG signatures or published checksums, and the EPEL/RPM Fusion release RPMs use `disable_gpg_check: true`."
+  ism-1792:
+    theme: "16-supply"
+    status: partial
+    ref: deploy
+    note: "Authenticity currently rests on TLS to the official mirrors plus pinned version strings. Mirroring artefacts internally after verifying signatures once is the recommended air-gap pattern."
+  ism-1816:
+    theme: "16-supply"
+    status: partial
+    ref: deploy
+    note: "This repository is the authoritative source for the host's configuration: changes are commits, peer-reviewed and applied by the pipeline, and a drifted host is corrected by the next run."
+  ism-1422:
+    theme: "16-supply"
+    status: partial
+    ref: deploy
+    note: "Access to the repository and to the Ansible Vault secrets is what grants the ability to change every host; protecting both is a source-control and secrets-management responsibility."

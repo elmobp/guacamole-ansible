@@ -1,0 +1,26 @@
+{
+  "_comment": [
+    "Provenance for ism-controls.json, which is stored byte-for-byte as retrieved so the",
+    "mapping in docs/LLD-RHEL-IRAP.md is reproducible. JSON has no comment syntax, so the",
+    "header lives in this sidecar file rather than in the dataset itself.",
+    "",
+    "THE CURRENTLY PUBLISHED ISM (cyber.gov.au) IS AUTHORITATIVE. Control numbers, wording",
+    "and applicability drift between quarterly ISM releases; re-retrieve and re-check before",
+    "relying on this mapping for an assessment. See docs/ISM.md for the refresh procedure."
+  ],
+  "source_url": "https://raw.githubusercontent.com/elmobp/ism-quiz/main/controls.json",
+  "source_repository": "https://github.com/elmobp/ism-quiz",
+  "source_branch": "main",
+  "retrieved_utc": "2026-09-11",
+  "sha256": "f88b1222148e363ddf7e1c0f53258c6ab6a18fdc5bc61bc4d29fbc818481572e",
+  "bytes": 137009,
+  "format": "object mapping control id (ism-NNNN / ism-principle-XN) to the control statement, with some HTML markup embedded",
+  "control_ids_as_published": 871,
+  "control_ids_after_normalisation": 907,
+  "normalisation_note": "36 values carry the NEXT control appended after a stray markdown table separator, e.g. '... | | [ism-0430](/control/ism-0430) | Access to systems ...'. scripts/ism_map.py splits these back out at load time; the raw file is left untouched.",
+  "consumed_by": [
+    "scripts/ism_map.py",
+    "docs/data/ism-mapping.yml",
+    "docs/LLD-RHEL-IRAP.md (section 12)"
+  ]
+}
