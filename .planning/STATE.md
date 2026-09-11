@@ -44,7 +44,7 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
 | — FreeRDP 3.15 build fix (Debian 13 / Ubuntu 24.04+) | ✅ validated | a5c006c |
 | 15 full CIS L2 coverage | ○ planned (vendor ansible-lockdown CIS + OpenSCAP gate) |
 | 16 deep ISM alignment + LLD rewrite | ○ planned |
-| 17 operator manual → PDF | ✅ done | PENDING_COMMIT |
+| 17 operator manual → PDF | ✅ done | 13f564f |
 | 18/19/20 | ❌ descoped 2026-09-11 (Puppet/Nix/Chef/Terraform + AWS + Azure) | |
 
 ## Validation status (2026-09-11)
