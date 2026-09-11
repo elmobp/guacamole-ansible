@@ -1,9 +1,9 @@
 ---
 gsd_state_version: "1.0"
 status: in-progress
-stopped_at: milestone-1 matrix validation (ubuntu2604 idempotence)
-last_updated: "2026-09-11T06:00:00.000Z"
-state_head: 1b85215
+stopped_at: Phases 15/16/17 running via background subagents
+last_updated: "2026-09-11T09:30:00.000Z"
+state_head: ef98860
 ---
 
 # Project State
@@ -29,7 +29,7 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
 | Ubuntu 26.04 | ✅ validated — full build, idempotent `changed=0`, checks green; needed chrony fix `b359f52` |
 | 9 roles (common, database, guacd, guacamole_client, nginx_proxy, guac_extensions, connections, backup, hardening) | ✅ implemented |
 | Docs: README + INSTALL/CONFIGURE/SCENARIOS/OPERATIONS/FIREWALL/LLD-RHEL-IRAP + architecture.drawio | ✅ |
-| container/ (Containerfile + compose + entrypoint) | ◆ implemented, image build not yet smoke-tested |
+| container/ (Containerfile + compose + entrypoint) | ✅ validated — `podman build` + full smoke (no-DB fail-fast, then against MariaDB: schema bootstrap, guacadmin login returns a real authToken). Fixed `ef98860`: playbook was never actually running (`-i 'localhost,'` didn't match `hosts: guacamole`) + systemd daemon-reload handlers now guarded for container builds. |
 | `.github/workflows/ci.yml` | ✅ lint + 7-distro build matrix + per-distro image matrix + guacd cache |
 
 ## Milestone 2
@@ -42,9 +42,9 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
 | 13 LDAP-group RBAC (`guac_user_groups` + ldap-group props) | ✅ code | 45a3953 |
 | 14 external log forwarding over TLS / RELP+TLS | ✅ code | a66489d |
 | — FreeRDP 3.15 build fix (Debian 13 / Ubuntu 24.04+) | ✅ validated | a5c006c |
-| 15 full CIS L2 coverage | ○ planned (vendor ansible-lockdown CIS + OpenSCAP gate) |
-| 16 deep ISM alignment + LLD rewrite | ○ planned |
-| 17 operator manual → PDF | ○ planned |
+| 15 full CIS L2 coverage | ◆ in progress (subagent, worktree `agent-a2c4e587033da3c32` / branch `worktree-agent-a2c4e587033da3c32`) |
+| 16 deep ISM alignment + LLD rewrite | ◆ in progress (subagent, worktree `agent-ac8beab45135de3fc` / branch `worktree-agent-ac8beab45135de3fc`) |
+| 17 operator manual → PDF | ◆ in progress (subagent, fresh worktree, restarted after a stall) |
 | 18/19/20 | ❌ descoped 2026-09-11 (Puppet/Nix/Chef/Terraform + AWS + Azure) | |
 
 ## Validation status (2026-09-11)
@@ -66,19 +66,24 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
   all-on (4 extensions load, nginx -t ok, login 200, idempotent) AND all-off baseline
   (changed=0, checks green, no SSO jars) — no regression.
   Interactive `scripts/configure.py` writes host_vars and asks the auth method.
-- Still TODO: `podman build` container image smoke, phase-11 source-ref smoke
-  (`-e guac_source_ref=1.6.0` on ol9), full non-ol9 matrix re-run after SSO change (low risk — guarded).
+- **Non-ol9 matrix re-run after SSO PASSED**: debian12, debian13, ubuntu2204, ubuntu2404, ubuntu2604
+  all green (idempotent, checks pass) — SSO additions caused zero regression.
+- **`guac_source_ref=1.6.0` (git-tag build) PASSED** — build marker `src:...guacamole-server@1.6.0`,
+  idempotent, checks green.
+- **Container image PASSED** — see table above.
 
-```
-cd ~/Documents/Projects/claude
-test/dr.sh ol9 ; test/upgrade.sh ol9 1.5.5 1.6.0
-podman build -t guacamole-appliance:local -f container/Containerfile .
-```
+**Milestone 1 + Milestone-2 phases 10–14 + container image + source-ref build: ALL VALIDATED.**
+Only Phases 15/16/17 remain, currently running via background subagents (see table above). Each
+agent checkpoint-commits incrementally in its own worktree; nothing has been merged to `main` yet.
+Note: `.claude/worktrees/` is gitignored (added `ef98860`) — a prior `git add -A` briefly picked up
+agent worktrees as embedded repos, caught and fixed before it reached a real commit.
 
 ## Resume
 
-Say "resume". Next: close out ubuntu2604 idempotence, then dr/upgrade/image smoke,
-then Phase 15 (CIS L2) / 16 (ISM+LLD) / 17 (PDF manual).
+Say "resume". Next: check on subagents `a3d0483d3b905f87e` (Phase 15), `a8caa1da37c68fbac`
+(Phase 16), `afdcf529c1fd31eae` (Phase 17) via ListAgents/SendMessage or task notifications;
+once each finishes, review its worktree branch and merge into `main`; then re-run the affected
+distros to confirm no regression before considering the whole roadmap done.
 
 ## Notes
 
@@ -89,10 +94,4 @@ then Phase 15 (CIS L2) / 16 (ISM+LLD) / 17 (PDF manual).
 - Every step committed to git — closing the laptop loses only the cached container images.
 
 ---
-*Last updated: 2026-09-10 (pause after phases 10–14)*
-
-## Session
-
-**Last session:** 2026-09-10T20:59:34.580Z
-**Stopped at:** context exhaustion at 75% (2026-09-10)
-**Resume file:** None
+*Last updated: 2026-09-11 (milestone-1 + phases 10-14 + image + source-ref all validated; 15/16/17 running via subagents)*
