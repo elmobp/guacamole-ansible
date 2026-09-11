@@ -2,16 +2,16 @@
 # Maps a toggle -> the Apache extension archive basename.
 # Each archive unpacks to <name>-<ver>/<name>-<ver>.jar
 guac_extension_matrix:
-  - { enabled: "{{ guac_totp_enabled | bool }}",         name: "guacamole-auth-totp" }
-  - { enabled: "{{ guac_duo_enabled | bool }}",          name: "guacamole-auth-duo" }
-  - { enabled: "{{ guac_ldap_enabled | bool }}",         name: "guacamole-auth-ldap" }
+  - { enabled: "{{ guac_totp_enabled | bool }}", name: "guacamole-auth-totp" }
+  - { enabled: "{{ guac_duo_enabled | bool }}", name: "guacamole-auth-duo" }
+  - { enabled: "{{ guac_ldap_enabled | bool }}", name: "guacamole-auth-ldap" }
   - { enabled: "{{ guac_quickconnect_enabled | bool }}", name: "guacamole-auth-quickconnect" }
-  - { enabled: "{{ guac_histrec_enabled | bool }}",      name: "guacamole-history-recording-storage" }
+  - { enabled: "{{ guac_histrec_enabled | bool }}", name: "guacamole-history-recording-storage" }
 
 # SSO / federated-auth sub-extensions. All ship inside one archive
 # (guacamole-auth-sso-<ver>.tar.gz), each as <sub>/guacamole-auth-sso-<sub>-<ver>.jar.
 guac_sso_matrix:
-  - { enabled: "{{ guac_openid_enabled | bool }}",   sub: "openid" }
-  - { enabled: "{{ guac_saml_enabled | bool }}",     sub: "saml" }
+  - { enabled: "{{ guac_openid_enabled | bool }}", sub: "openid" }
+  - { enabled: "{{ guac_saml_enabled | bool }}", sub: "saml" }
   - { enabled: "{{ guac_ssl_auth_enabled | bool }}", sub: "ssl" }
-  - { enabled: "{{ guac_cas_enabled | bool }}",      sub: "cas" }
+  - { enabled: "{{ guac_cas_enabled | bool }}", sub: "cas" }

@@ -93,16 +93,21 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install podman
         run: sudo apt-get update && sudo apt-get install -y podman
+      - name: Compute a valid image tag
+        id: tag
+        # matrix.base (e.g. "debian:13") has a colon, which is invalid inside a tag's second
+        # component (repo:tag) -> "guacamole-appliance:debian:13" is rejected as malformed.
+        run: echo "tag=guacamole-appliance:$(echo '${{ matrix.base }}' | tr ':' '-')" >> "$GITHUB_OUTPUT"
       - name: Build appliance image
         run: |
           podman build --build-arg BASE_IMAGE=${{ matrix.base }} \
-            -t guacamole-appliance:${{ matrix.base }} -f container/Containerfile .
+            -t ${{ steps.tag.outputs.tag }} -f container/Containerfile .
       - name: Smoke — image starts guacd + tomcat and serves the login page
         run: |
           podman run -d --name gcheck --network host \
-            -e GUAC_DB_HOST=127.0.0.1 -e GUAC_DB_PASSWORD=x guacamole-appliance:${{ matrix.base }} || true
+            -e GUAC_DB_HOST=127.0.0.1 -e GUAC_DB_PASSWORD=x ${{ steps.tag.outputs.tag }} || true
           # (compose/DB wiring is exercised separately; here we just confirm the image is well-formed)
-          podman image inspect guacamole-appliance:${{ matrix.base }} >/dev/null
+          podman image inspect ${{ steps.tag.outputs.tag }} >/dev/null
 
   ci-ok:
     name: CI passed

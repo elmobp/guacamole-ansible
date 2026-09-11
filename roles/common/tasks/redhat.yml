@@ -75,6 +75,34 @@
   register: _fw_start
   failed_when: false
 
+- name: Wait for firewalld D-Bus backend to be ready
+  ansible.builtin.command: firewall-cmd --state
+  register: _fw_ready
+  changed_when: false
+  failed_when: false
+  retries: 5
+  delay: 2
+  until: _fw_ready.rc == 0
+  when:
+    - guac_manage_firewall | bool
+    - _fw_start.state | default('') == 'started'
+
+# The firewalld unit can report "started" before its D-Bus backend has finished
+# initializing — seen on nested-container CI runners (GitHub Actions) even though
+# the same role converges fine on a real host or a non-nested podman VM. Skip
+# rather than hard-fail the whole play when it never becomes ready in time.
+- name: Warn if firewalld never became ready
+  ansible.builtin.debug:
+    msg: >-
+      firewalld's unit is active but 'firewall-cmd --state' never returned ready;
+      skipping firewall rule management this run. Common on nested-container CI
+      runners. Re-run once firewalld settles, or set guac_manage_firewall: false
+      if this host doesn't use firewalld.
+  when:
+    - guac_manage_firewall | bool
+    - _fw_start.state | default('') == 'started'
+    - _fw_ready.rc | default(1) != 0
+
 - name: Open firewall services (firewalld)
   ansible.posix.firewalld:
     service: "{{ item }}"
@@ -85,6 +113,7 @@
   when:
     - guac_manage_firewall | bool
     - _fw_start.state | default('') == 'started'
+    - _fw_ready.rc | default(1) == 0
 
 - name: Toggle direct Guacamole port (firewalld)
   ansible.posix.firewalld:
@@ -95,6 +124,7 @@
   when:
     - guac_manage_firewall | bool
     - _fw_start.state | default('') == 'started'
+    - _fw_ready.rc | default(1) == 0
 
 - name: Open extra firewall ports (firewalld)
   ansible.posix.firewalld:
@@ -106,3 +136,4 @@
   when:
     - guac_manage_firewall | bool
     - _fw_start.state | default('') == 'started'
+    - _fw_ready.rc | default(1) == 0
