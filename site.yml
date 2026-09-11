@@ -5,7 +5,8 @@
 #
 #   ansible-playbook site.yml
 #
-# Tags: common, database, guacd, client, proxy, extensions
+# Tags: common, database, guacd, client, proxy, extensions, backup, hardening,
+#       cis, connections
 # =============================================================================
 - name: Deploy Apache Guacamole
   hosts: guacamole
@@ -43,6 +44,17 @@
       tags: [backup]
     - role: hardening
       tags: [hardening]
+    # Full CIS Benchmark coverage (Phase 15). Runs AFTER hardening on purpose:
+    # roles/hardening owns the baseline drop-ins (50-guac-hardening sshd,
+    # 90-guac-hardening sysctl/audit rules) and roles/cis layers the rest of the
+    # benchmark on top in separate, higher-numbered files. It must also run after
+    # every package install in the play — its audit rule set is generated from
+    # the setuid binaries actually present, and moving it earlier makes converge 1
+    # and converge 2 disagree. roles/connections, which follows, only touches the
+    # database. Toggled independently of guac_hardening_enabled.
+    - role: cis
+      when: guac_cis_enabled | bool
+      tags: [cis, hardening]
     - role: connections
       tags: [connections]
 

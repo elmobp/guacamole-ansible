@@ -66,6 +66,20 @@
     validate: "visudo -cf %s"
   when: not ('5.2' is search(cis_skip_re))
 
+# Created up-front rather than left to the first sudo call: section 6 puts an
+# audit watch on this path, and auditctl rejects a watch on a file that does not
+# exist — taking the rest of the rule file down with it.
+- name: "5.2 — sudo log file exists"
+  ansible.builtin.file:
+    path: "{{ guac_cis_sudo_logfile }}"
+    state: touch
+    owner: root
+    group: root
+    mode: "0600"
+    access_time: preserve
+    modification_time: preserve
+  when: not ('5.2' is search(cis_skip_re))
+
 - name: "5.2.3 — audit sudoers entries that skip authentication"
   ansible.builtin.shell:
     cmd: >-

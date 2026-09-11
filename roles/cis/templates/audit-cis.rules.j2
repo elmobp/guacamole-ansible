@@ -9,6 +9,13 @@
 # binaries that actually exist on this host, enumerated AFTER every package
 # install in the play so the rendered file is stable across converges.
 
+#
+# auditctl refuses a watch on a path that does not exist and then SKIPS THE REST
+# OF THE FILE, so every path that is not guaranteed on all nine supported
+# platforms is emitted only when section6 stat'd it as present. `_present` is
+# that list. (Ubuntu 26.04 ships neither /var/log/lastlog nor /var/log/wtmp.)
+{% set _present = cis_audit_paths_present | default([]) %}
+
 ## Buffer and failure mode (6.3.3.1). No "-D" here on purpose: augenrules
 ## concatenates rules.d in filename order, and a second "-D" in a later-sorting
 ## file silently deletes everything the earlier files loaded.
@@ -44,11 +51,12 @@
 -w /etc/passwd -p wa -k identity
 -w /etc/gshadow -p wa -k identity
 -w /etc/shadow -p wa -k identity
--w /etc/security/opasswd -p wa -k identity
 -w /etc/nsswitch.conf -p wa -k identity
--w /etc/pam.conf -p wa -k identity
 -w /etc/pam.d/ -p wa -k identity
 -w /etc/security/ -p wa -k identity
+{% for p in ['/etc/security/opasswd', '/etc/pam.conf'] if p in _present %}
+-w {{ p }} -p wa -k identity
+{% endfor %}
 
 ## 6.3.3.7 — mandatory access control policy
 {% if ansible_os_family == 'RedHat' %}
@@ -60,13 +68,14 @@
 {% endif %}
 
 ## 6.3.3.8 — login and logout events
--w /var/log/lastlog -p wa -k logins
--w /var/run/faillock -p wa -k logins
+{% for p in ['/var/log/lastlog', '/var/run/faillock'] if p in _present %}
+-w {{ p }} -p wa -k logins
+{% endfor %}
 
 ## 6.3.3.9 — session initiation information
--w /var/run/utmp -p wa -k session
--w /var/log/wtmp -p wa -k session
--w /var/log/btmp -p wa -k session
+{% for p in ['/var/run/utmp', '/var/log/wtmp', '/var/log/btmp'] if p in _present %}
+-w {{ p }} -p wa -k session
+{% endfor %}
 
 ## 6.3.3.10 — discretionary access control permission modification
 -a always,exit -F arch=b64 -S chmod,fchmod,fchmodat,chown,fchown,fchownat,lchown -F auid>=1000 -F auid!=unset -k perm_mod
@@ -95,7 +104,9 @@
 ## 6.3.3.15 — kernel module loading, unloading and modification
 -a always,exit -F arch=b64 -S init_module,finit_module,delete_module,create_module,query_module -F auid>=1000 -F auid!=unset -k kernel_modules
 -a always,exit -F arch=b32 -S init_module,finit_module,delete_module,create_module,query_module -F auid>=1000 -F auid!=unset -k kernel_modules
+{% if '/usr/bin/kmod' in _present %}
 -w /usr/bin/kmod -p x -k kernel_modules
+{% endif %}
 
 ## 6.3.3.16 — Guacamole application configuration (site-specific, not CIS)
 -w {{ guac_home }}/ -p wa -k guacamole-config

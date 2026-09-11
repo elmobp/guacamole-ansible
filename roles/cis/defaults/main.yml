@@ -136,6 +136,9 @@ guac_cis_lock_system_accounts: true
 # sudo
 guac_cis_sudo_logfile: "/var/log/sudo.log"
 guac_cis_sudo_timestamp_timeout: 15
+# guacd is compiled to /usr/local/sbin — leaving /usr/local/{s,}bin out of
+# secure_path (as the stock CIS example does) breaks privileged calls to it.
+guac_cis_sudo_secure_path: "/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin"
 
 # ---------------------------------------------------------------------------
 # Section 6 — logging and auditing
@@ -166,6 +169,28 @@ guac_cis_auditd_disk_full_action: "single"
 guac_cis_auditd_disk_error_action: "single"
 guac_cis_auditd_max_log_file_action: "keep_logs"
 guac_cis_auditd_backlog_limit: 8192
+
+# Audit watch paths that are NOT guaranteed to exist on every supported
+# platform. auditctl rejects a watch on a missing path AND stops processing the
+# rest of the file at that point, so every one of these is stat'd first and only
+# emitted if it is really there. Ubuntu 26.04 is the reason this list exists:
+# it no longer ships /var/log/lastlog or /var/log/wtmp (wtmpdb replaced them).
+# Role-internal, not a user knob.
+cis_audit_network_paths:
+  - /etc/sysconfig/network
+  - /etc/NetworkManager
+  - /etc/network
+  - /etc/netplan
+  - /etc/systemd/network
+cis_audit_optional_paths:
+  - /var/log/lastlog
+  - /var/run/faillock
+  - /var/run/utmp
+  - /var/log/wtmp
+  - /var/log/btmp
+  - /etc/security/opasswd
+  - /etc/pam.conf
+  - /usr/bin/kmod
 
 guac_cis_journald_storage: "persistent"
 guac_cis_journald_max_use: "1G"

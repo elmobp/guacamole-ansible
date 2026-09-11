@@ -10,4 +10,8 @@ Defaults always_set_home
 Defaults match_group_by_gid
 Defaults always_query_group_plugin
 Defaults env_reset
-Defaults secure_path="/sbin:/bin:/usr/sbin:/usr/bin"
+# /usr/local/{s,}bin are in this list on purpose: guacd is compiled to
+# /usr/local/sbin/guacd and its libraries to /usr/local/lib. Dropping them (the
+# stock CIS example value does) makes every `sudo guacd`, `sudo ldconfig -p`
+# style call on this host fail in a way that is very hard to diagnose.
+Defaults secure_path="{{ guac_cis_sudo_secure_path }}"

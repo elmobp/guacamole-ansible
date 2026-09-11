@@ -104,10 +104,16 @@
         label: "{{ item.name }}"
       notify: Reload systemd (cis)
 
-    - name: "6.1.2 — enable the AIDE timer"
-      ansible.builtin.service:
+    # enabled-only would leave the timer inactive until the next reboot, so the
+    # control would be "configured" but not actually running. daemon_reload here
+    # rather than relying on the handler: the handler only fires at the end of
+    # the play, which is after this task.
+    - name: "6.1.2 — enable and start the AIDE timer"
+      ansible.builtin.systemd:
         name: guac-aide-check.timer
         enabled: true
+        state: started
+        daemon_reload: true
       when: not cis_in_container | bool
       failed_when: false
 
@@ -219,28 +225,28 @@
       changed_when: false
       failed_when: false
 
-    # auditctl rejects a watch on a path that does not exist and the rest of the
-    # file after it is skipped, so the network-config watches are filtered down
-    # to what is really on this host.
+    # auditctl rejects a watch on a path that does not exist AND skips the rest
+    # of the file after it, so every optional watch path is filtered down to
+    # what is really on this host. See cis_audit_optional_paths in defaults for
+    # why this matters (Ubuntu 26.04 dropped /var/log/lastlog and /var/log/wtmp).
     - name: "6.3.3 — which optional audit watch paths exist"
       ansible.builtin.stat:
         path: "{{ item }}"
-      loop:
-        - /etc/sysconfig/network
-        - /etc/NetworkManager
-        - /etc/network
-        - /etc/netplan
-        - /etc/systemd/network
+      loop: "{{ cis_audit_network_paths + cis_audit_optional_paths }}"
       register: _cis_watch_stat
       changed_when: false
 
     - name: "6.3.3 — collect the audit watch paths"
       ansible.builtin.set_fact:
-        cis_audit_watch_present: >-
+        cis_audit_paths_present: >-
           {{ _cis_watch_stat.results
              | selectattr('stat.exists')
              | map(attribute='item')
              | list | sort }}
+
+    - name: "6.3.3 — network-config subset of the audit watch paths"
+      ansible.builtin.set_fact:
+        cis_audit_watch_present: "{{ cis_audit_paths_present | intersect(cis_audit_network_paths) | sort }}"
 
     # 99- so it sorts after roles/hardening's 90- file; the distro-shipped
     # audit.rules sorts later still, which is why its "-D" is neutralised below.

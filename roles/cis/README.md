@@ -1,10 +1,18 @@
 # roles/cis — CIS Benchmark coverage (Level 1 + Level 2)
 
 Native implementation of the CIS Benchmark control set for the nine platforms
-this project supports. Invoked from `roles/hardening` (not from `site.yml`) so it
-runs after every package install in the play — the generated audit rules depend
-on what is actually installed, and moving it earlier breaks the `changed=0`
-idempotence gate.
+this project supports. Wired into `site.yml` as its own role step, immediately
+after `roles/hardening` and before `roles/connections`, guarded by
+`when: guac_cis_enabled | bool`.
+
+That position is deliberate. `roles/hardening` owns the baseline drop-ins
+(`50-guac-hardening` for sshd, `90-guac-hardening` for sysctl and audit rules)
+and this role layers the rest of the benchmark on top in separate,
+higher-numbered files. It also has to run after every package install in the
+play: the generated audit rule set is derived from the setuid binaries actually
+present on the host, so moving it earlier makes converge 1 and converge 2
+disagree and breaks the `changed=0` idempotence gate. `roles/connections`, which
+runs after it, only touches the database.
 
 Full narrative documentation, benchmark versions, the deviation register and the
 OpenSCAP workflow: **[`docs/CIS.md`](../../docs/CIS.md)**.
