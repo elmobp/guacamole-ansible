@@ -344,3 +344,16 @@
 - name: App-layer hardening
   ansible.builtin.include_tasks: app_layer.yml
   when: guac_hardening_enabled | bool
+
+# Full CIS Benchmark coverage (Phase 15). Deliberately invoked from here rather
+# than from site.yml: it has to run after every package install in the play so
+# the generated audit rules are stable, and roles/connections (which runs after
+# hardening) only touches the database. Toggled independently of
+# guac_hardening_enabled so the two can be reasoned about separately.
+- name: Full CIS benchmark coverage
+  ansible.builtin.include_role:
+    name: cis
+    apply:
+      tags: [cis]
+  when: guac_cis_enabled | bool
+  tags: [cis, hardening]

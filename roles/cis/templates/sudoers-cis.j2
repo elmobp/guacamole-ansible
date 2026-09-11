@@ -1,0 +1,13 @@
+# {{ ansible_managed }}  — CIS 5.2 sudo defaults
+# Validated with `visudo -cf` before it is installed; a syntax error here would
+# lock every operator out of privilege escalation.
+
+Defaults use_pty
+Defaults logfile="{{ guac_cis_sudo_logfile }}"
+Defaults timestamp_timeout={{ guac_cis_sudo_timestamp_timeout }}
+Defaults !visiblepw
+Defaults always_set_home
+Defaults match_group_by_gid
+Defaults always_query_group_plugin
+Defaults env_reset
+Defaults secure_path="/sbin:/bin:/usr/sbin:/usr/bin"

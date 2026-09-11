@@ -1,0 +1,276 @@
+---
+# =============================================================================
+# CIS Section 1 — Initial Setup
+#   1.1 Filesystem (kernel modules, partitions, mount options)
+#   1.2 Package management / software updates
+#   1.3 Mandatory Access Control (SELinux / AppArmor)
+#   1.4 Bootloader
+#   1.5 Additional process hardening
+#   1.6 Crypto policy
+#   1.7 Command line warning banners
+#   1.8 GNOME display manager  (excluded by default — no desktop on a jump host)
+# =============================================================================
+
+# --- 1.1.1 unused filesystem kernel modules --------------------------------
+- name: "1.1.1 — disable unused filesystem and hardware kernel modules"
+  ansible.builtin.template:
+    src: modprobe-cis.conf.j2
+    dest: /etc/modprobe.d/60-guac-cis.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: not ('1.1.1' is search(cis_skip_re))
+
+# --- 1.1.2 mount options ---------------------------------------------------
+# Excluded by default: an already-provisioned host cannot be repartitioned from
+# a config-management run. Enabling guac_cis_manage_mounts applies the mount
+# *options* the benchmark wants on the mount points that do exist.
+- name: "1.1.2 — harden mount options on existing mount points"
+  ansible.posix.mount:
+    path: "{{ item.path }}"
+    src: "{{ item.src }}"
+    fstype: "{{ item.fstype }}"
+    opts: "{{ item.opts }}"
+    state: mounted
+  loop:
+    - { path: /dev/shm, src: tmpfs, fstype: tmpfs, opts: "defaults,noexec,nosuid,nodev" }
+  loop_control:
+    label: "{{ item.path }}"
+  when:
+    - guac_cis_manage_mounts | bool
+    - not cis_in_container | bool
+    - not ('1.1.2' is search(cis_skip_re))
+  failed_when: false
+
+- name: "1.1.2 — report mount points that are not separate partitions"
+  ansible.builtin.set_fact:
+    cis_missing_partitions: >-
+      {{ ['/tmp', '/var', '/var/tmp', '/var/log', '/var/log/audit', '/home']
+         | difference(ansible_mounts | map(attribute='mount') | list) }}
+
+# --- 1.2 package management -----------------------------------------------
+- name: "1.2.1 — dnf gpgcheck enforced globally (RedHat)"
+  ansible.builtin.lineinfile:
+    path: /etc/dnf/dnf.conf
+    regexp: '^{{ item.k }}\s*='
+    line: "{{ item.k }}={{ item.v }}"
+    insertafter: '^\[main\]'
+    create: false
+  loop:
+    - { k: gpgcheck, v: "1" }
+    - { k: localpkg_gpgcheck, v: "1" }
+  when:
+    - ansible_os_family == "RedHat"
+    - not ('1.2.1' is search(cis_skip_re))
+  failed_when: false
+
+- name: "1.2.1 — apt refuses unauthenticated packages (Debian)"
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/60-guac-cis-auth
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      // Managed by Ansible (ansible-guacamole)
+      APT::Get::AllowUnauthenticated "false";
+      Acquire::AllowInsecureRepositories "false";
+      Acquire::AllowDowngradeToInsecureRepositories "false";
+  when:
+    - ansible_os_family == "Debian"
+    - not ('1.2.1' is search(cis_skip_re))
+
+# --- 1.3 Mandatory Access Control -----------------------------------------
+- name: "1.3.1 — SELinux (RedHat family)"
+  when:
+    - ansible_os_family == "RedHat"
+    - guac_cis_selinux_enforce | bool
+    - not ('1.3.1' is search(cis_skip_re))
+  block:
+    - name: "1.3.1.1 — SELinux userspace installed"
+      ansible.builtin.dnf:
+        name: [libselinux, policycoreutils]
+        state: present
+
+    - name: "1.3.1 — /etc/selinux/config present?"
+      ansible.builtin.stat:
+        path: /etc/selinux/config
+      register: _cis_selinux_cfg
+
+    # Config only. Flipping a live host from permissive to enforcing mid-play can
+    # break the nginx -> Tomcat proxy before roles/common's booleans are audited;
+    # the change is picked up on the next boot. guac_cis_selinux_setenforce_now
+    # opts into the immediate switch.
+    - name: "1.3.1.3/1.3.1.4/1.3.1.5 — SELinux enforcing + targeted policy"
+      ansible.builtin.lineinfile:
+        path: /etc/selinux/config
+        regexp: '^{{ item.k }}='
+        line: "{{ item.k }}={{ item.v }}"
+      loop:
+        - { k: SELINUX, v: "enforcing" }
+        - { k: SELINUXTYPE, v: "targeted" }
+      when: _cis_selinux_cfg.stat.exists
+
+    - name: "1.3.1.2 — SELinux not disabled on the kernel command line"
+      ansible.builtin.replace:
+        path: /etc/default/grub
+        regexp: '\s*\b(?:selinux=0|enforcing=0)\b'
+        replace: ''
+      when: not cis_in_container | bool
+      failed_when: false
+      notify: Regenerate grub config
+
+    - name: "1.3.1.5 — switch the running kernel to enforcing (opt-in)"
+      ansible.posix.selinux:
+        policy: targeted
+        state: enforcing
+      when:
+        - guac_cis_selinux_setenforce_now | bool
+        - not cis_in_container | bool
+      failed_when: false
+
+- name: "1.3.1 — AppArmor (Debian family)"
+  when:
+    - ansible_os_family == "Debian"
+    - not ('1.3.1' is search(cis_skip_re))
+  block:
+    - name: "1.3.1.1 — AppArmor installed"
+      ansible.builtin.apt:
+        name: [apparmor, apparmor-utils]
+        state: present
+
+    # Appends into the existing quoted value instead of replacing it — the
+    # negative lookahead makes the edit a no-op once apparmor=1 is present.
+    - name: "1.3.1.2 — AppArmor enabled on the kernel command line"
+      ansible.builtin.replace:
+        path: /etc/default/grub
+        regexp: '^(GRUB_CMDLINE_LINUX=")(?!.*\bapparmor=1\b)(.*)"$'
+        replace: '\1apparmor=1 security=apparmor \2"'
+      when: not cis_in_container | bool
+      failed_when: false
+      notify: Regenerate grub config
+
+    # L2 control. Off by default: forcing every shipped profile to enforce can
+    # confine nginx/mariadb in ways that have not been validated against this
+    # stack. Turn on deliberately, then re-run test/check.sh.
+    - name: "1.3.1.4 — all AppArmor profiles in enforce mode (L2, opt-in)"
+      ansible.builtin.command: aa-enforce /etc/apparmor.d/
+      register: _cis_aa_enforce
+      changed_when: false
+      failed_when: false
+      when:
+        - cis_l2 | bool
+        - guac_cis_apparmor_enforce_profiles | bool
+        - not cis_in_container | bool
+
+# --- 1.4 bootloader --------------------------------------------------------
+- name: "1.4.1 — bootloader password (RedHat)"
+  ansible.builtin.copy:
+    dest: "{{ cis_grub_user_cfg }}"
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      # Managed by Ansible (ansible-guacamole)
+      GRUB2_PASSWORD={{ guac_cis_grub_password_hash }}
+  when:
+    - ansible_os_family == "RedHat"
+    - guac_cis_grub_password_hash | length > 0
+    - not cis_in_container | bool
+    - not ('1.4.1' is search(cis_skip_re))
+  notify: Regenerate grub config
+
+- name: "1.4.1 — bootloader password (Debian)"
+  ansible.builtin.copy:
+    dest: "{{ cis_grub_user_cfg }}"
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      # Managed by Ansible (ansible-guacamole)
+      cat <<'GRUBEOF'
+      set superusers="{{ guac_cis_grub_superuser }}"
+      password_pbkdf2 {{ guac_cis_grub_superuser }} {{ guac_cis_grub_password_hash }}
+      GRUBEOF
+  when:
+    - ansible_os_family == "Debian"
+    - guac_cis_grub_password_hash | length > 0
+    - not cis_in_container | bool
+    - not ('1.4.1' is search(cis_skip_re))
+  notify: Regenerate grub config
+
+- name: "1.4.2 — bootloader config is root-owned and unreadable by others"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ cis_grub_cfg_paths }}"
+  when:
+    - not cis_in_container | bool
+    - not ('1.4.2' is search(cis_skip_re))
+  failed_when: false
+
+# --- 1.5 additional process hardening -------------------------------------
+# ASLR / ptrace_scope / suid_dumpable live in the single sysctl drop-in written
+# by section3_network.yml. Core-dump storage is handled here.
+- name: "1.5.3/1.5.4 — core dumps are not stored and backtraces are off"
+  ansible.builtin.copy:
+    dest: /etc/systemd/coredump.conf.d/60-guac-cis.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible (ansible-guacamole)
+      [Coredump]
+      Storage=none
+      ProcessSizeMax=0
+  when: not ('1.5.3' is search(cis_skip_re))
+
+- name: "1.5.4 — core dumps disabled for every user (limits)"
+  ansible.builtin.copy:
+    dest: /etc/security/limits.d/60-guac-cis-coredump.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible (ansible-guacamole)
+      *  hard  core  0
+  when: not ('1.5.4' is search(cis_skip_re))
+
+# --- 1.6 crypto policy (RedHat family) ------------------------------------
+- name: "1.6 — system-wide crypto policy"
+  when:
+    - ansible_os_family == "RedHat"
+    - guac_cis_crypto_policy | length > 0
+    - not guac_fips_enabled | bool
+    - not ('1.6.1' is search(cis_skip_re))
+  block:
+    - name: "1.6.1 — read the current crypto policy"
+      ansible.builtin.command: update-crypto-policies --show
+      register: _cis_cryptopol
+      changed_when: false
+      failed_when: false
+
+    - name: "1.6.1/1.6.3/1.6.4 — set the crypto policy (no SHA-1, no CBC)"
+      ansible.builtin.command: "update-crypto-policies --set {{ guac_cis_crypto_policy }}"
+      register: _cis_cryptopol_set
+      changed_when: _cis_cryptopol_set.rc == 0
+      failed_when: false
+      when:
+        - _cis_cryptopol.rc | default(1) == 0
+        - (_cis_cryptopol.stdout | default('') | trim) != guac_cis_crypto_policy
+
+# --- 1.7 warning banners ---------------------------------------------------
+- name: "1.7.1/1.7.2/1.7.3 — command line warning banners"
+  ansible.builtin.copy:
+    dest: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ guac_cis_banner_text }}"
+  loop:
+    - /etc/motd
+    - /etc/issue
+    - /etc/issue.net
+  when: not ('1.7' is search(cis_skip_re))

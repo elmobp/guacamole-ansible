@@ -1,0 +1,10 @@
+# {{ ansible_managed }}  — CIS 5.3.3.1 account lockout (pam_faillock)
+deny = {{ guac_cis_faillock.deny }}
+unlock_time = {{ guac_cis_faillock.unlock_time }}
+fail_interval = {{ guac_cis_faillock.fail_interval }}
+{% if guac_cis_faillock.even_deny_root %}
+even_deny_root
+root_unlock_time = {{ guac_cis_faillock.root_unlock_time }}
+{% endif %}
+silent
+audit

@@ -1,0 +1,66 @@
+{{ ansible_managed }}
+CIS audit findings — {{ cis_benchmark_name }}
+Profile: Server {{ 'Level 2' if cis_l2 | bool else 'Level 1' }}
+
+NOTE: this file deliberately carries no timestamp. It is regenerated from the
+live system on every converge, and a clock in the body would make the playbook
+report changed=1 forever.
+
+Excluded controls (not remediated by roles/cis):
+{% for e in guac_cis_exclusions | default([]) %}
+  - {{ e }}
+{% endfor %}
+
+--------------------------------------------------------------------------
+1.1.2 — mount points that are NOT separate partitions
+--------------------------------------------------------------------------
+{% for p in cis_missing_partitions | default([]) %}
+  {{ p }}
+{% else %}
+  (none)
+{% endfor %}
+
+--------------------------------------------------------------------------
+5.2.3 — sudoers entries that skip authentication (NOPASSWD)
+--------------------------------------------------------------------------
+{% for l in _cis_nopasswd.stdout_lines | default([]) %}
+  {{ l }}
+{% else %}
+  (none)
+{% endfor %}
+
+--------------------------------------------------------------------------
+7.1.11 — world-writable files (first 200)
+--------------------------------------------------------------------------
+{% for l in _cis_ww_files.stdout_lines | default([]) %}
+  {{ l }}
+{% else %}
+  (none)
+{% endfor %}
+
+--------------------------------------------------------------------------
+7.1.12 — unowned / ungrouped files (first 200)
+--------------------------------------------------------------------------
+{% for l in _cis_unowned.stdout_lines | default([]) %}
+  {{ l }}
+{% else %}
+  (none)
+{% endfor %}
+
+--------------------------------------------------------------------------
+7.1.13 — setuid / setgid binaries
+--------------------------------------------------------------------------
+{% for l in _cis_suid.stdout_lines | default([]) %}
+  {{ l }}
+{% else %}
+  (none)
+{% endfor %}
+
+--------------------------------------------------------------------------
+7.2 — account and group consistency
+--------------------------------------------------------------------------
+{% for l in _cis_accounts.stdout_lines | default([]) %}
+  {{ l }}
+{% else %}
+  (none)
+{% endfor %}

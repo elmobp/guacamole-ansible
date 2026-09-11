@@ -257,6 +257,36 @@ guac_auto_patch: false                           # dnf-automatic / unattended-up
 guac_session_timeout_minutes: 15
 
 # ---------------------------------------------------------------------------
+# CIS Benchmark (Phase 15) — full Level 1 / Level 2 coverage.
+# Implemented natively in roles/cis (NOT a vendored ansible-lockdown wrapper —
+# rationale, benchmark versions and the deviation register are in docs/CIS.md).
+# Every knob in roles/cis/defaults/main.yml can be overridden here.
+# ---------------------------------------------------------------------------
+guac_cis_enabled: true
+guac_cis_level: "l2"                             # l1 | l2
+# Control IDs NOT remediated. Prefix matched: "1.1.2" also skips "1.1.2.1.3".
+# Every entry below is justified in docs/CIS.md § Deliberate deviations —
+# read it before removing one; several exist to keep Guacamole serving traffic.
+guac_cis_exclusions:
+  - "1.1.2"        # separate partitions / mount options — cannot repartition a live host
+  - "1.4.1"        # bootloader password — set guac_cis_grub_password_hash to enable
+  - "1.6.2"        # FIPS crypto policy — owned by guac_fips_enabled (needs a reboot)
+  - "1.8"          # GNOME desktop — never installed on a jump host
+  - "2.1.22"       # "web server not installed" — this host IS the web server
+  - "3.1.1"        # disable IPv6 — breaks dual-stack deployments
+  - "6.3.3.21"     # auditd immutable mode (-e 2) — blocks rule reload without a reboot
+  - "7.1.11"       # world-writable files — audited and reported, not auto-chmod'd
+  - "7.1.12"       # unowned files — audited and reported, not auto-chown'd
+
+# Opt-ins that CIS requires but that need a decision or a value from you:
+guac_cis_grub_password_hash: ""                  # grub2-mkpasswd-pbkdf2 output => enables 1.4.1
+guac_cis_pam_faillock_debian: false              # Debian/Ubuntu PAM lockout (lockout risk — see docs)
+guac_cis_auditd_immutable: false                 # -e 2; needs a reboot to change rules afterwards
+guac_cis_manage_mounts: false                    # remount /dev/shm nodev,nosuid,noexec
+guac_cis_apparmor_enforce_profiles: false        # aa-enforce every profile (Debian family, L2)
+guac_cis_selinux_setenforce_now: false           # flip a running RHEL host to enforcing immediately
+
+# ---------------------------------------------------------------------------
 # Backup / BCP-DR — see roles/backup/defaults/main.yml
 # ---------------------------------------------------------------------------
 guac_backup_enabled: true

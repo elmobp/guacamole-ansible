@@ -1,0 +1,17 @@
+# {{ ansible_managed }}  — CIS 5.4.3 interactive session defaults
+# shellcheck shell=sh
+
+# 5.4.3.2 — default user umask
+umask {{ guac_cis_umask }}
+
+{% if guac_cis_shell_timeout | int > 0 %}
+# 5.4.3.3 — idle shell timeout. readonly so a user cannot raise it; the export
+# is skipped for non-interactive shells so scripts and scp are unaffected.
+case "$-" in
+  *i*)
+    TMOUT={{ guac_cis_shell_timeout }}
+    readonly TMOUT
+    export TMOUT
+    ;;
+esac
+{% endif %}

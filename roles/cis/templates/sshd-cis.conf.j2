@@ -1,0 +1,25 @@
+# {{ ansible_managed }}  — CIS 5.1 sshd settings
+#
+# sshd keeps the FIRST value it reads for any keyword, and
+# /etc/ssh/sshd_config.d/50-guac-hardening.conf is parsed before this file.
+# Everything roles/hardening already sets is therefore deliberately absent here:
+#   PermitRootLogin, PermitEmptyPasswords, PasswordAuthentication,
+#   KbdInteractiveAuthentication, MaxAuthTries, LoginGraceTime,
+#   ClientAliveInterval, ClientAliveCountMax, X11Forwarding, AllowTcpForwarding,
+#   AllowAgentForwarding, IgnoreRhosts, HostbasedAuthentication, MaxSessions,
+#   Ciphers, KexAlgorithms, MACs, Banner.
+
+LogLevel VERBOSE
+UsePAM yes
+StrictModes yes
+PubkeyAuthentication yes
+PermitUserEnvironment no
+GSSAPIAuthentication no
+KerberosAuthentication no
+MaxStartups 10:30:60
+AllowStreamLocalForwarding no
+GatewayPorts no
+PermitTunnel no
+{% if cis_l2 | bool %}
+DisableForwarding yes
+{% endif %}

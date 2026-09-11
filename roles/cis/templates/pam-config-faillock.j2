@@ -1,0 +1,15 @@
+Name: Guacamole CIS account lockout (pam_faillock)
+Default: yes
+Priority: 1024
+Auth-Type: Primary
+Auth:
+	[default=die]	pam_faillock.so authfail
+	sufficient	pam_faillock.so authsucc
+Auth-Initial:
+	[default=die]	pam_faillock.so authfail
+	sufficient	pam_faillock.so authsucc
+Account-Type: Primary
+Account:
+	required	pam_faillock.so
+Account-Initial:
+	required	pam_faillock.so

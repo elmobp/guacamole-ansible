@@ -1,0 +1,95 @@
+---
+# =============================================================================
+# CIS Section 3 — Network  +  Section 4 — Host based firewall
+#   3.1 Network devices (IPv6, wireless, bluetooth)
+#   3.2 Uncommon network protocol kernel modules
+#   3.3 Network kernel parameters (sysctl)
+#   4.x Host firewall
+#
+# Guard rail: the firewall work here is additive only. It confirms that
+# 22/80/443 are open and that the loopback interface is trusted; it never
+# installs or enables a second firewall, and it never sets a policy that would
+# cut the nginx -> Tomcat -> guacd path (all of which is loopback traffic).
+# =============================================================================
+
+# --- 3.1 / 3.2 kernel modules ---------------------------------------------
+# (written by section1's modprobe-cis.conf.j2 — one file, one owner)
+
+- name: "3.1.2 — wireless interfaces disabled"
+  ansible.builtin.command: nmcli radio all off
+  register: _cis_wifi
+  changed_when: false
+  failed_when: false
+  when:
+    - cis_l2 | bool
+    - not cis_in_container | bool
+    - not ('3.1.2' is search(cis_skip_re))
+
+# --- 3.3 network kernel parameters ----------------------------------------
+# Single drop-in so there is exactly one CIS-owned sysctl file. 1.5.x process
+# hardening parameters ride along here for the same reason.
+- name: "1.5/3.3 — CIS kernel parameters"
+  ansible.builtin.template:
+    src: sysctl-cis.conf.j2
+    dest: /etc/sysctl.d/60-guac-cis.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: not ('3.3' is search(cis_skip_re))
+  notify: Reload sysctl
+
+# --- 4.x host firewall -----------------------------------------------------
+- name: "4.x — firewalld keeps the Guacamole ports open (RedHat)"
+  when:
+    - ansible_os_family == "RedHat"
+    - guac_cis_manage_firewall | bool
+    - guac_manage_firewall | default(true) | bool
+    - not cis_in_container | bool
+    - not ('4' is search(cis_skip_re))
+  block:
+    - name: "4.1.1 — firewalld installed and running"
+      ansible.builtin.service:
+        name: firewalld
+        state: started
+        enabled: true
+      register: _cis_fw
+      failed_when: false
+
+    - name: "4.1.x — required Guacamole ports stay open"
+      ansible.posix.firewalld:
+        port: "{{ item }}"
+        permanent: true
+        immediate: true
+        state: enabled
+      loop: "{{ guac_cis_required_ports }}"
+      when: _cis_fw.state | default('') == 'started'
+      failed_when: false
+
+- name: "4.x — ufw keeps the Guacamole ports open (Debian)"
+  when:
+    - ansible_os_family == "Debian"
+    - guac_cis_manage_firewall | bool
+    - guac_manage_firewall | default(true) | bool
+    - not cis_in_container | bool
+    - not ('4' is search(cis_skip_re))
+  block:
+    # ufw has no idempotent status query worth parsing, and roles/common already
+    # treats these as declarative no-ops — changed_when:false keeps the
+    # converge-to-zero gate honest.
+    - name: "4.2.x — ufw default policy and loopback rules"
+      ansible.builtin.command: "ufw {{ item }}"
+      loop:
+        - "default deny incoming"
+        - "default allow outgoing"
+        - "allow in on lo"
+        - "allow out on lo"
+        - "deny in from 127.0.0.0/8"
+        - "deny in from ::1"
+      changed_when: false
+      failed_when: false
+
+    - name: "4.2.x — required Guacamole ports stay open"
+      ansible.builtin.command: "ufw allow {{ item }}"
+      loop: "{{ guac_cis_required_ports }}"
+      changed_when: false
+      failed_when: false

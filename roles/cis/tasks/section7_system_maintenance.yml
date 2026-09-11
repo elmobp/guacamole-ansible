@@ -1,0 +1,147 @@
+---
+# =============================================================================
+# CIS Section 7 — System Maintenance
+#   7.1 System file permissions
+#   7.2 Local user and group settings
+#
+# 7.1.11 (world-writable files) and 7.1.12 (unowned files) are excluded from
+# remediation by default: a blind chmod/chown sweep across a live host is how
+# you break MariaDB's datadir or a mounted volume at 3am. They are *audited*
+# unconditionally and written to guac_cis_audit_report_path so the finding is
+# visible without being acted on. See docs/CIS.md § Exclusions.
+# =============================================================================
+
+# --- 7.1 system file permissions ------------------------------------------
+- name: "7.1.1-7.1.6 — passwd/group/shadow permissions"
+  ansible.builtin.file:
+    path: "{{ item.p }}"
+    owner: root
+    group: "{{ item.g }}"
+    mode: "{{ item.m }}"
+  loop:
+    - { p: /etc/passwd, g: root, m: "0644" }
+    - { p: /etc/passwd-, g: root, m: "0644" }
+    - { p: /etc/group, g: root, m: "0644" }
+    - { p: /etc/group-, g: root, m: "0644" }
+    - { p: /etc/shadow, g: "{{ cis_shadow_group }}", m: "0000" }
+    - { p: /etc/shadow-, g: "{{ cis_shadow_group }}", m: "0000" }
+    - { p: /etc/gshadow, g: "{{ cis_shadow_group }}", m: "0000" }
+    - { p: /etc/gshadow-, g: "{{ cis_shadow_group }}", m: "0000" }
+    - { p: /etc/shells, g: root, m: "0644" }
+    - { p: /etc/security/opasswd, g: root, m: "0600" }
+  loop_control:
+    label: "{{ item.p }}"
+  when: not ('7.1.1' is search(cis_skip_re))
+  failed_when: false
+
+- name: "7.1.11 — audit world-writable files"
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      find / -xdev -not -path '/proc/*' -not -path '/sys/*' -type f -perm -0002
+      2>/dev/null | head -200
+    executable: /bin/bash
+  register: _cis_ww_files
+  changed_when: false
+  failed_when: false
+  when: guac_cis_report_enabled | bool
+
+- name: "7.1.11 — remediate world-writable files (opt-in)"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: "o-w"
+  loop: "{{ _cis_ww_files.stdout_lines | default([]) }}"
+  when: not ('7.1.11' is search(cis_skip_re))
+  failed_when: false
+
+- name: "7.1.12 — audit unowned / ungrouped files"
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      find / -xdev -not -path '/proc/*' -not -path '/sys/*' \( -nouser -o -nogroup \)
+      2>/dev/null | head -200
+    executable: /bin/bash
+  register: _cis_unowned
+  changed_when: false
+  failed_when: false
+  when: guac_cis_report_enabled | bool
+
+- name: "7.1.12 — remediate unowned / ungrouped files (opt-in)"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+  loop: "{{ _cis_unowned.stdout_lines | default([]) }}"
+  when: not ('7.1.12' is search(cis_skip_re))
+  failed_when: false
+
+- name: "7.1.13 — audit setuid / setgid binaries"
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      find / -xdev -not -path '/proc/*' -not -path '/sys/*' -type f
+      \( -perm -4000 -o -perm -2000 \) 2>/dev/null | sort -u
+    executable: /bin/bash
+  register: _cis_suid
+  changed_when: false
+  failed_when: false
+  when: guac_cis_report_enabled | bool
+
+# --- 7.2 local user and group settings ------------------------------------
+- name: "7.2.x — audit account and group consistency"
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      echo '# duplicate UIDs';
+      cut -d: -f3 /etc/passwd | sort | uniq -d;
+      echo '# duplicate GIDs';
+      cut -d: -f3 /etc/group | sort | uniq -d;
+      echo '# duplicate user names';
+      cut -d: -f1 /etc/passwd | sort | uniq -d;
+      echo '# duplicate group names';
+      cut -d: -f1 /etc/group | sort | uniq -d;
+      echo '# uid 0 accounts';
+      awk -F: '($3 == 0) { print $1 }' /etc/passwd;
+      echo '# groups referenced by passwd but missing from group';
+      awk -F: '{ print $4 }' /etc/passwd | sort -u |
+        while read -r g; do getent group "$g" >/dev/null || echo "$g"; done;
+      echo '# root PATH';
+      echo "$PATH"
+    executable: /bin/bash
+  register: _cis_accounts
+  changed_when: false
+  failed_when: false
+  when: guac_cis_report_enabled | bool
+
+- name: "7.2.x — home directories are not group/world accessible"
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      awk -F: '($3 >= 1000) && ($7 !~ /(nologin|false)$/) && ($6 != "") { print $6 }' /etc/passwd
+    executable: /bin/bash
+  register: _cis_homes
+  changed_when: false
+  failed_when: false
+  when: not ('7.2' is search(cis_skip_re))
+
+- name: "7.2.x — tighten interactive home directory permissions"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    mode: "0700"
+    state: directory
+  loop: "{{ _cis_homes.stdout_lines | default([]) }}"
+  when: not ('7.2' is search(cis_skip_re))
+  failed_when: false
+
+# --- compliance report -----------------------------------------------------
+# Written with a stable body so a converged host produces an identical file and
+# the run still reports changed=0. Nothing here is a "check-mode lie": the
+# findings are regenerated from the live system every converge.
+- name: "7.x — write the CIS audit findings report"
+  ansible.builtin.template:
+    src: cis-audit-report.txt.j2
+    dest: "{{ guac_cis_audit_report_path }}"
+    owner: root
+    group: root
+    mode: "0640"
+  when: guac_cis_report_enabled | bool

@@ -1,0 +1,178 @@
+---
+# =============================================================================
+# roles/cis — full CIS Benchmark coverage (Level 1 + Level 2)
+#
+# Native implementation (NOT a vendored ansible-lockdown wrapper — see docs/CIS.md
+# for the rationale). Every remediation is keyed to a CIS control ID so it can be
+# switched off individually via guac_cis_exclusions.
+#
+# Benchmarks tracked (see docs/CIS.md for versions):
+#   RedHat family  -> CIS Red Hat Enterprise Linux 9 / 10 Benchmark, "Server Level 2"
+#   Debian         -> CIS Debian Linux 12 Benchmark, "Server Level 2"
+#   Ubuntu         -> CIS Ubuntu Linux 22.04/24.04 LTS Benchmark, "Server Level 2"
+#
+# Control IDs below follow the RHEL 9 v2.x section numbering, which CIS also uses
+# (with very small drift) for Debian 12 and Ubuntu 22.04/24.04 v2.x. docs/CIS.md
+# carries the per-OS mapping table.
+# =============================================================================
+
+guac_cis_enabled: true
+guac_cis_level: "l2"                 # l1 | l2  (l2 == l1 plus the Level 2 controls)
+
+# ---------------------------------------------------------------------------
+# Deliberate deviations. Each entry is a CIS control ID (or section prefix) that
+# this role will NOT remediate. Prefix matching is used: "1.1.2" also excludes
+# "1.1.2.1.3". Every default entry is justified in docs/CIS.md § Exclusions.
+# Append your own, do not silently drop these without reading the rationale.
+# ---------------------------------------------------------------------------
+guac_cis_exclusions:
+  - "1.1.2"        # separate partitions / mount options — cannot repartition a live host
+  - "1.4.1"        # bootloader password — needs an operator-supplied PBKDF2 hash
+  - "1.6.2"        # FIPS crypto policy — owned by guac_fips_enabled (needs a reboot)
+  - "1.8"          # GNOME desktop — never installed on a jump host
+  - "2.1.22"       # "web server not installed" — this host IS the web server (nginx + Tomcat)
+  - "3.1.1"        # disable IPv6 — breaks dual-stack deployments
+  - "6.3.3.21"     # auditd immutable mode (-e 2) — blocks rule reload without a reboot
+  - "7.1.11"       # world-writable file remediation — audited + reported, not auto-chmod'd
+  - "7.1.12"       # unowned/ungrouped file remediation — audited + reported, not auto-chown'd
+
+# ---------------------------------------------------------------------------
+# Guard rails — things this role must never do to a working Guacamole host.
+# These are consumed by the tasks; changing them is how you break the box.
+# ---------------------------------------------------------------------------
+# Ports that must stay reachable no matter what the firewall controls say.
+guac_cis_required_ports: ["22/tcp", "80/tcp", "443/tcp"]
+# Packages/services the benchmark would otherwise remove or mask.
+guac_cis_protected_services: [nginx, tomcat, guacd, mariadb, mysqld, sshd, ssh]
+
+# ---------------------------------------------------------------------------
+# Section 1 — initial setup
+# ---------------------------------------------------------------------------
+# Extra kernel modules to disable beyond the roles/hardening filesystem list.
+guac_cis_blacklist_modules_net: [dccp, tipc, rds, sctp]
+guac_cis_blacklist_modules_l2: [bluetooth, firewire-core, thunderbolt]
+
+# MAC (SELinux / AppArmor)
+guac_cis_selinux_enforce: true        # writes SELINUX=enforcing to /etc/selinux/config
+guac_cis_selinux_setenforce_now: false  # do NOT flip a running host mid-play (proxy risk)
+guac_cis_apparmor_enforce_profiles: false  # L2; `aa-enforce` every profile (Debian family)
+
+# Bootloader password. Generate with `grub2-mkpasswd-pbkdf2` (RHEL) or
+# `grub-mkpasswd-pbkdf2` (Debian) and paste the grub.pbkdf2.sha512... string.
+guac_cis_grub_password_hash: ""
+guac_cis_grub_superuser: "root"
+
+# Crypto policy (RHEL family only). "" => leave alone.
+guac_cis_crypto_policy: "DEFAULT:NO-SHA1"
+
+# Login banners
+guac_cis_banner_text: |
+  Authorised use only. All activity on this system is monitored and recorded.
+  Disconnect immediately if you are not an authorised user.
+
+# ---------------------------------------------------------------------------
+# Section 2 — services
+# ---------------------------------------------------------------------------
+guac_cis_remove_server_services: true
+guac_cis_remove_client_packages: true
+# Anything listed here is never removed even if it appears in the benchmark list.
+guac_cis_package_keep: []
+
+# ---------------------------------------------------------------------------
+# Section 3/4 — network + firewall
+# ---------------------------------------------------------------------------
+guac_cis_manage_firewall: true        # honours guac_manage_firewall as well
+guac_cis_manage_mounts: false         # remount /dev/shm etc. with nodev,nosuid,noexec
+
+# ---------------------------------------------------------------------------
+# Section 5 — access, authentication, authorisation
+# ---------------------------------------------------------------------------
+guac_cis_pam_pwquality: true
+guac_cis_pam_faillock: true           # RHEL: via authselect. Debian: see below.
+# Debian/Ubuntu faillock edits the shared PAM stack (pam-auth-update). Off by
+# default: a mistake there locks every account out of the box, and this project
+# cannot integration-test a PAM lockout. The profile is still installed so the
+# switch is a one-liner. docs/CIS.md § Exclusions.
+guac_cis_pam_faillock_debian: false
+guac_cis_pam_pwhistory: true
+
+guac_cis_pwquality:
+  minlen: 14
+  dcredit: -1
+  ucredit: -1
+  ocredit: -1
+  lcredit: -1
+  difok: 2
+  maxrepeat: 3
+  maxsequence: 3
+  dictcheck: 1
+  enforce_for_root: true
+guac_cis_faillock:
+  deny: 5
+  unlock_time: 900
+  fail_interval: 900
+  root_unlock_time: 60
+  even_deny_root: true
+guac_cis_pwhistory_remember: 24
+
+guac_cis_password_max_days: 365
+guac_cis_password_min_days: 1
+guac_cis_password_warn_age: 7
+guac_cis_password_inactive_days: 30
+
+guac_cis_shell_timeout: 900           # TMOUT, seconds
+guac_cis_umask: "027"
+
+# su(1) restriction — pam_wheel with an empty group means "nobody may su";
+# privilege escalation goes through sudo, which stays fully functional.
+guac_cis_restrict_su: true
+guac_cis_su_group: "sugroup"
+
+# System accounts must not have a login shell. These are exempt (they legitimately
+# do, or breaking them breaks the box).
+guac_cis_nologin_exempt: [root, sync, shutdown, halt, nfsnobody]
+guac_cis_lock_system_accounts: true
+
+# sudo
+guac_cis_sudo_logfile: "/var/log/sudo.log"
+guac_cis_sudo_timestamp_timeout: 15
+
+# ---------------------------------------------------------------------------
+# Section 6 — logging and auditing
+# ---------------------------------------------------------------------------
+guac_cis_aide_enabled: true
+# `aide --init` walks the whole filesystem. Pointless and slow inside a build
+# container, so it is skipped there; the package + config + timer are still laid
+# down so the control is configured either way.
+guac_cis_aide_cron_oncalendar: "*-*-* 05:00:00"
+# Volatile trees excluded from the integrity baseline (they change constantly
+# and would drown a real --check report in noise).
+guac_cis_aide_exclude_extra: []
+cis_aide_exclusions: "{{ ['/var/lib/mysql', '/var/lib/guacamole/recordings', '/var/log/audit',
+                         guac_build_dir | default('/usr/local/src/guacamole'),
+                         guac_db_backup_dir | default('/var/backups/guacamole')]
+                        + (guac_cis_aide_exclude_extra | default([])) }}"
+
+guac_cis_auditd_enabled: true
+guac_cis_auditd_immutable: false      # see exclusion 6.3.3.21
+guac_cis_auditd_max_log_file: 8       # MB
+guac_cis_auditd_num_logs: 5
+guac_cis_auditd_space_left_action: "email"
+# CIS allows halt or single here. "single" is the less destructive of the two
+# compliant options — "halt" powers the jump host off the moment /var/log/audit
+# fills, which on a bastion means locking every operator out at once.
+guac_cis_auditd_admin_space_left_action: "single"
+guac_cis_auditd_disk_full_action: "single"
+guac_cis_auditd_disk_error_action: "single"
+guac_cis_auditd_max_log_file_action: "keep_logs"
+guac_cis_auditd_backlog_limit: 8192
+
+guac_cis_journald_storage: "persistent"
+guac_cis_journald_max_use: "1G"
+guac_cis_journald_compress: true
+
+# ---------------------------------------------------------------------------
+# Section 7 — system maintenance (audit-and-report, see exclusions above)
+# ---------------------------------------------------------------------------
+guac_cis_audit_report_path: "/var/log/guac-cis-audit.txt"
+guac_cis_report_enabled: true

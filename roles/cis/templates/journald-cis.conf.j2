@@ -1,0 +1,8 @@
+# {{ ansible_managed }}  — CIS 6.2.1 journald
+[Journal]
+Storage={{ guac_cis_journald_storage }}
+Compress={{ 'yes' if guac_cis_journald_compress else 'no' }}
+SystemMaxUse={{ guac_cis_journald_max_use }}
+ForwardToSyslog=yes
+RateLimitIntervalSec=30s
+RateLimitBurst=10000

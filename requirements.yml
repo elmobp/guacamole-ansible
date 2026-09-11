@@ -2,6 +2,13 @@
 # Install with:  ansible-galaxy collection install -r requirements.yml
 # Version ceilings keep these compatible with ansible-core 2.14 (EL9 'ansible' pkg)
 # and ansible-core 2.16 (EL10 'ansible-core' pkg).
+#
+# NOTE on CIS: roles/cis implements the benchmark natively and deliberately does
+# NOT pull the ansible-lockdown RHEL*-CIS / UBUNTU*-CIS / DEBIAN12-CIS roles.
+# Those roles have no upstream equivalent for Debian 13 or Ubuntu 26.04 (two of
+# our nine supported platforms), are not idempotent on a second converge, and
+# would need several hundred tunables set just to stop them tearing down the
+# very web stack this host exists to serve. docs/CIS.md § Why not ansible-lockdown.
 collections:
   - name: ansible.posix
     version: ">=1.5.4,<3.0.0"
