@@ -41,8 +41,19 @@ from the laptop — not `podman exec`) to close the CIS agent's flagged risk. Ap
   only — the file that actually matters (`/etc/sudoers.d/60-guac-cis`) is correctly `0440` in every
   run. Worth a look if it ever recurs on a real (non-fresh) host, but not blocking.
 
-Still open, not started: Debian SSG content-gap check, and running the CIS OpenSCAP CI gate for
-real on GitHub Actions for the first time.
+## First real OpenSCAP run 2026-09-11 — github.com/elmobp/guacamole-ansible/issues/1
+
+Manually ran the compliance.yml logic against a fresh `test/run.sh ol9` build (idempotent,
+checks green) ahead of it ever running in CI. **Confirmed a real content gap**: Oracle Linux 9's
+packaged `scap-security-guide` ships no `cis`/`cis_level1_server`/`cis_level2_server` profile at
+all (only ANSSI/CCN/CUI/E8/HIPAA/ISM-Official/OSPP/PCI-DSS/Standard/STIG) — the OL9 leg of the
+automated gate would currently no-op with a warning, not actually evaluate anything. Ran
+`standard` and `ism_o` (ACSC ISM Official) as stand-ins instead: both scored ~92%, and **both
+failed the exact same 2 rules** — `rpm_verify_permissions` (maps to `ism-1409`, a control already
+flagged as a gap in the Phase 16 ISM mapping — independent confirmation) and
+`configure_crypto_policy` (OS-level `update-crypto-policies` never invoked). Filed as GitHub issue
+#1 with a fix-next-week checklist. Debian/Ubuntu legs and a genuine CIS-labelled profile source
+are still open.
 
 # Project State
 
