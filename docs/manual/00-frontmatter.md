@@ -5,7 +5,9 @@ author: "Platform / Infrastructure Engineering"
 date: "2026-09-11"
 ---
 
-\newpage
+```{=typst}
+#pagebreak()
+```
 
 ## Document purpose
 

@@ -103,7 +103,7 @@ extensions, and the two-distro test harness.
 
 ## Milestone 2 — requested 2026-09-10 (sized honestly, sequenced)
 
-**Descoped 2026-09-11:** Phases 18 (Puppet/Nix/Chef/Terraform CDK), 19 (AWS), 20 (Azure). Remaining M2 work: 15 (CIS L2), 16 (ISM+LLD), 17 (PDF manual).
+**Descoped 2026-09-11:** Phases 18 (Puppet/Nix/Chef/Terraform CDK), 19 (AWS), 20 (Azure). Remaining M2 work: 15 (CIS L2), 16 (ISM+LLD). Phase 17 (PDF manual) done 2026-09-11.
 
 **Phases 10-14 implemented + validated on OL9 (2026-09-11): base PASS, M2 smoke failed=0, idempotent, BALANCING/RBAC/TLS-syslog asserted.**
 
@@ -160,12 +160,19 @@ Pick phases to run; they are mostly independent. Sizes: **S** ≈ hours, **M** �
   column and a POA&M.
 - **Success:** LLD covers every in-scope ISM control with an honest status + evidence pointer.
 
-### Phase 17: Operator manual (PDF)  **[L]**
-- `docs/manual/` (Markdown) → PDF via pandoc in CI. Every moving piece: architecture,
-  each role & variable, install, day-2 ops, upgrades, backup/restore/DR drills, connection &
-  RBAC administration, MFA enrolment, TLS/cert rotation, hardening & FIPS, log/SIEM,
-  troubleshooting runbooks, disaster scenarios. Diagrams from `architecture.drawio` (exported PNG).
-- **Success:** `make manual` produces `guacamole-operator-manual.pdf`; CI attaches it to releases.
+### Phase 17 ✅ Operator manual (PDF)  **[L]**
+- `docs/manual/` (14 Markdown chapters) → PDF via pandoc + typst, built locally with
+  `make manual` / `scripts/build-manual.sh` and in CI (`.github/workflows/manual.yml`, triggers
+  on `docs/manual/**` changes and on tags, uploads the PDF as a workflow artifact and attaches it
+  to GitHub releases). Covers architecture (request-flow diagram + trust boundaries), every
+  role's variables (full `group_vars/all.yml` reference table), install/day-2 ops, connections &
+  RBAC, every auth method (DB/LDAP/TOTP/Duo/OpenID/SAML/X.509/CAS), TLS lifecycle, upgrades,
+  backup/restore/DR, hardening & FIPS posture (pointing at `docs/CIS.md`/`docs/LLD-RHEL-IRAP.md`
+  for the full compliance mapping rather than duplicating it), networking, the container image,
+  and a troubleshooting runbook of real, previously-seen failures.
+- **Success:** `make manual` produces `docs/manual/guacamole-operations-manual.pdf` (verified
+  locally: pandoc 3.11 + typst 0.15.1, 66 pages, ~920KB); CI builds it on every `docs/manual/**`
+  change and attaches it to tagged releases.
 
 ### Phase 18: `iac/` multi-tool implementations  — ❌ DESCOPED 2026-09-11 (out of scope)
 - New branch `iac`, subfolders: `ansible/` (move current), then **parallel re-implementations**:

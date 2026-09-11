@@ -44,7 +44,7 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
 | — FreeRDP 3.15 build fix (Debian 13 / Ubuntu 24.04+) | ✅ validated | a5c006c |
 | 15 full CIS L2 coverage | ○ planned (vendor ansible-lockdown CIS + OpenSCAP gate) |
 | 16 deep ISM alignment + LLD rewrite | ○ planned |
-| 17 operator manual → PDF | ○ planned |
+| 17 operator manual → PDF | ✅ done | PENDING_COMMIT |
 | 18/19/20 | ❌ descoped 2026-09-11 (Puppet/Nix/Chef/Terraform + AWS + Azure) | |
 
 ## Validation status (2026-09-11)
@@ -68,6 +68,20 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
   Interactive `scripts/configure.py` writes host_vars and asks the auth method.
 - Still TODO: `podman build` container image smoke, phase-11 source-ref smoke
   (`-e guac_source_ref=1.6.0` on ol9), full non-ol9 matrix re-run after SSO change (low risk — guarded).
+- **Phase 17 (operator manual → PDF) done 2026-09-11**, built in a separate worktree (touched
+  only `docs/manual/**`, `scripts/build-manual.sh`, `Makefile`, `.github/workflows/manual.yml`,
+  `.gitignore`, `.planning/*`, one line of `README.md` — no `roles/**`/`group_vars/**`/`ci.yml`
+  touched, no podman/ansible-playbook run). 14 chapters (00 frontmatter through 13 reference,
+  ~9,500 words total) covering architecture, day-2 ops, users/RBAC, connections, every auth
+  method, TLS, upgrades, backup/DR, hardening/compliance (points at `docs/CIS.md` /
+  `docs/LLD-RHEL-IRAP.md`/`docs/ISM.md` rather than duplicating — those didn't exist yet in this
+  worktree since phases 15/16 run elsewhere), networking, the container image, troubleshooting,
+  and a full `group_vars/all.yml` variable reference. Toolchain: pandoc 3.11 + typst 0.15.1
+  (`brew install pandoc typst` on macOS; CI downloads a pinned typst release binary on Ubuntu) —
+  chosen over LaTeX/weasyprint/wkhtmltopdf because this sandbox's outdated Xcode CLT couldn't
+  build weasyprint's Python deps from source and a cask-installed BasicTeX needs interactive sudo;
+  typst is a single prebuilt Rust binary with a native pandoc `--pdf-engine=typst` integration.
+  `make manual` verified locally end-to-end: 66-page, ~920KB, structurally valid PDF.
 
 ```
 cd ~/Documents/Projects/claude
@@ -78,7 +92,7 @@ podman build -t guacamole-appliance:local -f container/Containerfile .
 ## Resume
 
 Say "resume". Next: close out ubuntu2604 idempotence, then dr/upgrade/image smoke,
-then Phase 15 (CIS L2) / 16 (ISM+LLD) / 17 (PDF manual).
+then Phase 15 (CIS L2) / 16 (ISM+LLD). Phase 17 (PDF manual) is done.
 
 ## Notes
 

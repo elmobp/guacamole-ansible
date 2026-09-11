@@ -4,5 +4,8 @@ __pycache__/
 .vault_pass
 collections/
 
+# Generated operator manual PDF (built by scripts/build-manual.sh / `make manual`)
+docs/manual/*.pdf
+
 # Agent worktrees (managed by Claude Code)
 .claude/worktrees/
