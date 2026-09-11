@@ -43,7 +43,7 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
 | 14 external log forwarding over TLS / RELP+TLS | ✅ code | a66489d |
 | — FreeRDP 3.15 build fix (Debian 13 / Ubuntu 24.04+) | ✅ validated | a5c006c |
 | 15 full CIS L2 coverage | ○ planned (vendor ansible-lockdown CIS + OpenSCAP gate) |
-| 16 deep ISM alignment + LLD rewrite | ○ planned |
+| 16 deep ISM alignment + LLD rewrite | ✅ docs — 165 ISM controls mapped (✅44 🟡99 📋16 ❌6), generated §12 + §12.1 exclusions + 19-item POA&M, `scripts/ism_map.py --check` green |
 | 17 operator manual → PDF | ○ planned |
 | 18/19/20 | ❌ descoped 2026-09-11 (Puppet/Nix/Chef/Terraform + AWS + Azure) | |
 
@@ -66,6 +66,23 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
   all-on (4 extensions load, nginx -t ok, login 200, idempotent) AND all-off baseline
   (changed=0, checks green, no SSO jars) — no regression.
   Interactive `scripts/configure.py` writes host_vars and asks the auth method.
+- **Phase 16 (ISM + LLD) COMPLETE** — docs-only, no role/CI/group_vars changes, so no re-validation
+  of the distro matrix is required. `docs/LLD-RHEL-IRAP.md` §12 is now **generated** from
+  `docs/data/ism-mapping.yml` + a hash-pinned control dataset by `scripts/ism_map.py` (stdlib
+  only). 165 controls mapped — ✅ 44 · 🟡 99 · 📋 16 · ❌ 6 — every row citing a variable, file,
+  unit directive or verified behaviour. Plus §12.1 (25 out-of-scope families) and §12.2 (19-item
+  POA&M seed). Methodology and refresh procedure in `docs/ISM.md`.
+  - Verification done this session: `ism_map.py --check` exits 0 (table matches the generator
+    byte-for-byte); all 21 LLD anchors resolve and none are unused; all 48 `guac_*` variables
+    cited across the mapping and LLD exist in the repo; 20+ rows spot-checked line-by-line
+    against the roles; dataset re-downloaded and SHA-256 re-verified unchanged.
+  - **Known caveat:** the dataset is a third-party community extract of the ISM with no release
+    label, not the ACSC publication (cyber.gov.au was unreachable non-interactively). Stated in
+    `docs/ISM.md` §1, the §12 disclaimer and the sidecar. Swapping in the official XLSX/OSCAL
+    release is a data change only.
+  - Cross-phase: the §12 rows are anchored to what `roles/hardening` does **today**, so the table
+    does not depend on Phase 15's `roles/cis` landing; `roles/cis` / `docs/CIS.md` are referenced
+    generically where relevant.
 - Still TODO: `podman build` container image smoke, phase-11 source-ref smoke
   (`-e guac_source_ref=1.6.0` on ol9), full non-ol9 matrix re-run after SSO change (low risk — guarded).
 
@@ -78,7 +95,11 @@ podman build -t guacamole-appliance:local -f container/Containerfile .
 ## Resume
 
 Say "resume". Next: close out ubuntu2604 idempotence, then dr/upgrade/image smoke,
-then Phase 15 (CIS L2) / 16 (ISM+LLD) / 17 (PDF manual).
+then Phase 15 (CIS L2) / 17 (PDF manual). Phase 16 (ISM+LLD) is done.
+
+When Phase 15 lands, revisit the §12 rows that name `roles/cis` (`ism-1409`, `ism-1037`,
+`ism-1403`) and POA&M items 1, 4, 5 and 8 — several 🟡/❌ statuses should improve. Edit
+`docs/data/ism-mapping.yml`, then `python3 scripts/ism_map.py`; never hand-edit the §12 rows.
 
 ## Notes
 
