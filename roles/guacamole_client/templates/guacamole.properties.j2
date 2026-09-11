@@ -53,3 +53,81 @@ ldap-group-name-attribute: {{ guac_ldap.group_name_attribute | default('cn') }}
 # History recording storage
 recording-search-path: {{ guac_histrec_path }}
 {% endif %}
+{% if guac_openid_enabled | bool %}
+
+# OpenID Connect (identity layer over the MySQL/JDBC extension)
+openid-authorization-endpoint: {{ guac_openid.authorization_endpoint }}
+openid-jwks-endpoint: {{ guac_openid.jwks_endpoint }}
+openid-issuer: {{ guac_openid.issuer }}
+openid-client-id: {{ guac_openid.client_id }}
+openid-redirect-uri: {{ guac_openid.redirect_uri }}
+openid-username-claim-type: {{ guac_openid.username_claim_type | default('email') }}
+openid-groups-claim-type: {{ guac_openid.groups_claim_type | default('groups') }}
+openid-scope: {{ guac_openid.scope | default('openid email profile') }}
+{% if guac_openid.attributes_claim_type | default('') | length > 0 %}
+openid-attributes-claim-type: {{ guac_openid.attributes_claim_type }}
+{% endif %}
+{% if guac_openid.allowed_clock_skew | default('') | length > 0 %}
+openid-allowed-clock-skew: {{ guac_openid.allowed_clock_skew }}
+{% endif %}
+{% if guac_openid.max_token_validity | default('') | length > 0 %}
+openid-max-token-validity: {{ guac_openid.max_token_validity }}
+{% endif %}
+{% if guac_openid.max_nonce_validity | default('') | length > 0 %}
+openid-max-nonce-validity: {{ guac_openid.max_nonce_validity }}
+{% endif %}
+{% endif %}
+{% if guac_saml_enabled | bool %}
+
+# SAML 2.0 (identity layer over the MySQL/JDBC extension)
+{% if guac_saml.idp_metadata_url | default('') | length > 0 %}
+saml-idp-metadata-url: {{ guac_saml.idp_metadata_url }}
+{% endif %}
+{% if guac_saml.idp_url | default('') | length > 0 %}
+saml-idp-url: {{ guac_saml.idp_url }}
+{% endif %}
+{% if guac_saml.entity_id | default('') | length > 0 %}
+saml-entity-id: {{ guac_saml.entity_id }}
+{% endif %}
+saml-callback-url: {{ guac_saml.callback_url }}
+saml-strict: {{ guac_saml.strict | default(true) | bool | lower }}
+saml-debug: {{ guac_saml.debug | default(false) | bool | lower }}
+saml-compress-request: {{ guac_saml.compress_request | default(true) | bool | lower }}
+saml-compress-response: {{ guac_saml.compress_response | default(true) | bool | lower }}
+saml-group-attribute: {{ guac_saml.group_attribute | default('groups') }}
+{% if guac_saml.x509_cert_path | default('') | length > 0 %}
+saml-x509-cert-path: {{ guac_saml.x509_cert_path }}
+{% endif %}
+{% if guac_saml.private_key_path | default('') | length > 0 %}
+saml-private-key-path: {{ guac_saml.private_key_path }}
+{% endif %}
+{% endif %}
+{% if guac_ssl_auth_enabled | bool %}
+
+# X.509 client-certificate / smart-card auth (identity layer over MySQL/JDBC)
+ssl-auth-uri: {{ guac_ssl_auth.auth_uri }}
+ssl-auth-primary-uri: {{ guac_ssl_auth.primary_uri }}
+ssl-auth-client-certificate-header: {{ guac_ssl_auth.client_certificate_header | default('X-Client-Certificate') }}
+ssl-auth-client-verified-header: {{ guac_ssl_auth.client_verified_header | default('X-Client-Verified') }}
+{% if guac_ssl_auth.subject_username_attribute | default('') | length > 0 %}
+ssl-auth-subject-username-attribute: {{ guac_ssl_auth.subject_username_attribute }}
+{% endif %}
+{% if guac_ssl_auth.subject_base_dn | default('') | length > 0 %}
+ssl-auth-subject-base-dn: {{ guac_ssl_auth.subject_base_dn }}
+{% endif %}
+{% if guac_ssl_auth.max_token_validity | default('') | length > 0 %}
+ssl-auth-max-token-validity: {{ guac_ssl_auth.max_token_validity }}
+{% endif %}
+{% if guac_ssl_auth.max_domain_validity | default('') | length > 0 %}
+ssl-auth-max-domain-validity: {{ guac_ssl_auth.max_domain_validity }}
+{% endif %}
+{% endif %}
+{% if guac_cas_enabled | bool %}
+
+# CAS (identity layer over the MySQL/JDBC extension)
+cas-authorization-endpoint: {{ guac_cas.authorization_endpoint }}
+cas-redirect-uri: {{ guac_cas.redirect_uri }}
+{% if guac_cas.clearpass_key | default('') | length > 0 %}
+cas-clearpass-key: {{ guac_cas.clearpass_key }}
+{% endif %}
+{% endif %}

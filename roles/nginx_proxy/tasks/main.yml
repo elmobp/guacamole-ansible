@@ -65,6 +65,32 @@
         group: root
         mode: "0640"
 
+# --- X.509 client-cert auth: deploy the client-issuing CA bundle -----------
+- name: Ensure ssl-auth dir exists (X.509 auth)
+  ansible.builtin.file:
+    path: "{{ guac_home }}/ssl-auth"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - guac_ssl_auth_enabled | bool
+    - guac_ssl_auth_manage_nginx | bool
+
+- name: Deploy client-certificate CA bundle (X.509 auth)
+  ansible.builtin.copy:
+    content: "{{ guac_ssl_auth_client_ca }}"
+    dest: "{{ guac_home }}/ssl-auth/client-ca.pem"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - guac_ssl_auth_enabled | bool
+    - guac_ssl_auth_manage_nginx | bool
+    - guac_tls_mode == "self-signed"
+  no_log: true
+  notify: Reload nginx
+
 # --- Site + main config (site first so nginx -t on nginx.conf sees it) ------
 - name: Deploy Guacamole reverse-proxy site
   ansible.builtin.template:

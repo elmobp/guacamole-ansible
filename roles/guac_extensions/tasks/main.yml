@@ -3,6 +3,49 @@
   ansible.builtin.set_fact:
     _guac_enabled_extensions: "{{ guac_extension_matrix | selectattr('enabled', 'truthy') | list }}"
     _guac_disabled_extensions: "{{ guac_extension_matrix | rejectattr('enabled', 'truthy') | list }}"
+    _guac_sso_enabled: "{{ guac_sso_matrix | selectattr('enabled', 'truthy') | list }}"
+
+- name: Validate OpenID Connect configuration
+  ansible.builtin.assert:
+    that:
+      - guac_openid.authorization_endpoint | length > 0
+      - guac_openid.jwks_endpoint | length > 0
+      - guac_openid.issuer | length > 0
+      - guac_openid.client_id | length > 0
+      - guac_openid.redirect_uri | length > 0
+    fail_msg: >-
+      guac_openid_enabled=true needs guac_openid.authorization_endpoint, .jwks_endpoint,
+      .issuer, .client_id and .redirect_uri set.
+  when: guac_openid_enabled | bool
+
+- name: Validate SAML configuration
+  ansible.builtin.assert:
+    that:
+      - guac_saml.callback_url | length > 0
+      - (guac_saml.idp_metadata_url | length > 0) or (guac_saml.idp_url | length > 0 and guac_saml.entity_id | length > 0)
+    fail_msg: >-
+      guac_saml_enabled=true needs guac_saml.callback_url plus either guac_saml.idp_metadata_url
+      or both guac_saml.idp_url and guac_saml.entity_id.
+  when: guac_saml_enabled | bool
+
+- name: Validate X.509 client-certificate auth configuration
+  ansible.builtin.assert:
+    that:
+      - guac_ssl_auth.auth_uri | length > 0
+      - guac_ssl_auth.primary_uri | length > 0
+      - (guac_ssl_auth_client_ca | length > 0) or (not (guac_ssl_auth_manage_nginx | bool))
+    fail_msg: >-
+      guac_ssl_auth_enabled=true needs guac_ssl_auth.auth_uri and .primary_uri
+      (and guac_ssl_auth_client_ca when guac_ssl_auth_manage_nginx=true).
+  when: guac_ssl_auth_enabled | bool
+
+- name: Validate CAS configuration
+  ansible.builtin.assert:
+    that:
+      - guac_cas.authorization_endpoint | length > 0
+      - guac_cas.redirect_uri | length > 0
+    fail_msg: "guac_cas_enabled=true needs guac_cas.authorization_endpoint and .redirect_uri."
+  when: guac_cas_enabled | bool
 
 - name: Download extension archives
   ansible.builtin.get_url:
@@ -36,6 +79,35 @@
     label: "{{ item.name }}"
   notify: Restart tomcat
 
+# --- SSO / federated auth (single guacamole-auth-sso archive) -----------
+- name: Download guacamole-auth-sso archive
+  ansible.builtin.get_url:
+    url: "{{ guac_apache_dl_base }}/binary/guacamole-auth-sso-{{ guac_version }}.tar.gz"
+    dest: "{{ guac_build_dir }}/guacamole-auth-sso-{{ guac_version }}.tar.gz"
+    mode: "0644"
+  when: _guac_sso_enabled | length > 0
+
+- name: Unpack guacamole-auth-sso archive
+  ansible.builtin.unarchive:
+    src: "{{ guac_build_dir }}/guacamole-auth-sso-{{ guac_version }}.tar.gz"
+    dest: "{{ guac_build_dir }}"
+    remote_src: true
+    creates: "{{ guac_build_dir }}/guacamole-auth-sso-{{ guac_version }}/openid/guacamole-auth-sso-openid-{{ guac_version }}.jar"
+  when: _guac_sso_enabled | length > 0
+
+- name: Install enabled SSO extension jars
+  ansible.builtin.copy:
+    src: "{{ guac_build_dir }}/guacamole-auth-sso-{{ guac_version }}/{{ item.sub }}/guacamole-auth-sso-{{ item.sub }}-{{ guac_version }}.jar"
+    dest: "{{ guac_extensions_dir }}/guacamole-auth-sso-{{ item.sub }}-{{ guac_version }}.jar"
+    remote_src: true
+    owner: root
+    group: "{{ guac_tomcat_group }}"
+    mode: "0664"
+  loop: "{{ _guac_sso_enabled }}"
+  loop_control:
+    label: "guacamole-auth-sso-{{ item.sub }}"
+  notify: Restart tomcat
+
 - name: Find all installed Guacamole extension jars
   ansible.builtin.find:
     paths: "{{ guac_extensions_dir }}"
@@ -56,7 +128,9 @@
       {{ ['guacamole-auth-jdbc-mysql-' ~ guac_version ~ '.jar']
          + (['branding.jar'] if guac_branding_enabled | bool else [])
          + (_guac_enabled_extensions | map(attribute='name')
-            | map('regex_replace', '$', '-' ~ guac_version ~ '.jar') | list) }}
+            | map('regex_replace', '$', '-' ~ guac_version ~ '.jar') | list)
+         + (_guac_sso_enabled | map(attribute='sub')
+            | map('regex_replace', '^(.*)$', 'guacamole-auth-sso-\1-' ~ guac_version ~ '.jar') | list) }}
   notify: Restart tomcat
 
 # --- History recording storage path ------------------------------------

@@ -148,6 +148,73 @@ guac_histrec_enabled: false
 guac_histrec_path: "/var/lib/guacamole/recordings"
 guac_branding_enabled: false                     # dark-theme branding.jar
 
+# ---------------------------------------------------------------------------
+# Single sign-on / federated auth (guacamole-auth-sso archive).
+# Each is an *identity* layer on top of the MySQL/JDBC extension: the SSO
+# provider proves who you are, the database still holds connections + perms.
+# Pick ONE primary method (or database-only). MFA (TOTP/Duo) can stack on top.
+# Full property reference: docs/CONFIGURE.md.
+# ---------------------------------------------------------------------------
+guac_openid_enabled: false                        # OpenID Connect (Keycloak, Azure AD, Okta, Google…)
+guac_saml_enabled: false                          # SAML 2.0 (ADFS, Azure AD, Okta, Shibboleth…)
+guac_ssl_auth_enabled: false                      # X.509 client-certificate / smart-card auth
+guac_cas_enabled: false                           # CAS (Apereo/Jasig)
+
+# OpenID Connect — required: authorization_endpoint, jwks_endpoint, issuer, client_id, redirect_uri
+guac_openid:
+  authorization_endpoint: ""                      # https://idp.example.com/realms/x/protocol/openid-connect/auth
+  jwks_endpoint: ""                               # https://idp.example.com/realms/x/protocol/openid-connect/certs
+  issuer: ""                                      # https://idp.example.com/realms/x
+  client_id: ""
+  redirect_uri: ""                                # https://{{ guac_proxy_site }}/  (must match the IdP)
+  username_claim_type: "email"                    # JWT claim used as the Guacamole username
+  groups_claim_type: "groups"                     # JWT claim listing group membership (for RBAC)
+  scope: "openid email profile"
+  # optional / advanced:
+  attributes_claim_type: ""
+  allowed_clock_skew: ""                          # seconds (default 30)
+  max_token_validity: ""                          # minutes (default 300)
+  max_nonce_validity: ""                          # minutes (default 10)
+
+# SAML 2.0 — required: callback_url, plus EITHER idp_metadata_url OR (idp_url + entity_id)
+guac_saml:
+  idp_metadata_url: ""                            # https://idp/.../metadata  OR  file:///etc/guacamole/idp-metadata.xml
+  idp_url: ""                                     # base IdP URL (only if no metadata URL)
+  entity_id: ""                                   # https://{{ guac_proxy_site }}/  (this SP's entity id)
+  callback_url: ""                                # https://{{ guac_proxy_site }}/  (IdP posts the assertion here)
+  group_attribute: "groups"                       # IdP attribute carrying group membership
+  strict: true                                    # enforce signature/cert validation (false = testing only)
+  debug: false
+  compress_request: true
+  compress_response: true
+  x509_cert_path: ""                              # sign requests (optional)
+  private_key_path: ""
+
+# X.509 client-certificate auth. Guacamole needs a SEPARATE TLS vhost that does
+# `ssl_verify_client` and forwards the verified cert. When guac_ssl_auth_manage_nginx
+# is true the nginx role adds `ssl_verify_client optional` + the X-Client-* headers to
+# the main vhost (fine for a lab / single hostname); production should use a dedicated
+# wildcard `*.{{ guac_ssl_auth_domain }}` endpoint — see docs/CONFIGURE.md.
+guac_ssl_auth:
+  auth_uri: ""                                    # https://cert.example.com/   (vhost requiring the cert)
+  primary_uri: ""                                 # https://guac.example.com/   (normal vhost)
+  client_certificate_header: "X-Client-Certificate"
+  client_verified_header: "X-Client-Verified"
+  subject_username_attribute: "CN"                # DN attribute -> username
+  subject_base_dn: ""                             # restrict acceptable subject DNs (optional)
+  max_token_validity: ""                          # minutes (default 5)
+  max_domain_validity: ""                         # minutes (default 5)
+guac_ssl_auth_manage_nginx: true                  # add the cert-verifying vhost + header scrubbing to nginx
+guac_ssl_auth_client_ca: ""                       # PEM bundle of the CA(s) that issue client certs (vault)
+guac_ssl_auth_domain: ""                          # server_name for the cert vhost, e.g. "cert.guac.example.com"
+                                                  #   (also serves *.<domain> for the ephemeral subdomains)
+
+# CAS — required: authorization_endpoint, redirect_uri
+guac_cas:
+  authorization_endpoint: ""                      # https://cas.example.com/cas
+  redirect_uri: ""                                # https://{{ guac_proxy_site }}/
+  clearpass_key: ""                               # optional: path to PGP key to decrypt ClearPass creds
+
 # LDAP settings (reference: add-auth-ldap.sh) — templated, NOT login-tested here
 guac_ldap:
   hostname: "dc1.yourdomain.com dc2.yourdomain.com"

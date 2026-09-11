@@ -32,8 +32,52 @@ server {
         proxy_set_header Connection $connection_upgrade;
         proxy_read_timeout 3600s;
         access_log off;
+{% if guac_ssl_auth_enabled | bool and guac_ssl_auth_manage_nginx | bool %}
+        # X.509 client-cert auth: this is the PRIMARY (non-cert) vhost. Scrub the
+        # client-cert headers so a browser cannot forge an authenticated identity.
+        proxy_set_header {{ guac_ssl_auth.client_verified_header | default('X-Client-Verified') }} "";
+        proxy_set_header {{ guac_ssl_auth.client_certificate_header | default('X-Client-Certificate') }} "";
+{% endif %}
     }
 }
+{% if guac_ssl_auth_enabled | bool and guac_ssl_auth_manage_nginx | bool %}
+
+# X.509 client-certificate auth vhost. Verifies the client cert and forwards the
+# result to Guacamole's ssl extension. Serves <domain> and *.<domain> (the ssl
+# extension redirects through ephemeral subdomains). Production: use a wildcard
+# TLS cert for *.{{ guac_ssl_auth_domain }}; this reuses the self-signed cert.
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name {{ guac_ssl_auth_domain }} *.{{ guac_ssl_auth_domain }};
+
+    ssl_certificate     {{ guac_ssl_cert_dir }}/{{ guac_proxy_site }}.crt;
+    ssl_certificate_key {{ guac_ssl_key_dir }}/{{ guac_proxy_site }}.key;
+
+    ssl_client_certificate {{ guac_home }}/ssl-auth/client-ca.pem;
+    ssl_verify_client optional;
+    ssl_verify_depth 3;
+
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+
+    location / {
+        proxy_pass {{ guac_proxy_upstream }};
+        proxy_buffering off;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header {{ guac_ssl_auth.client_verified_header | default('X-Client-Verified') }} $ssl_client_verify;
+        proxy_set_header {{ guac_ssl_auth.client_certificate_header | default('X-Client-Certificate') }} $ssl_client_escaped_cert;
+        proxy_read_timeout 3600s;
+        access_log off;
+    }
+}
+{% endif %}
 
 server {
     listen 80 default_server;
