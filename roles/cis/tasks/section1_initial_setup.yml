@@ -22,9 +22,12 @@
   when: not ('1.1.1' is search(cis_skip_re))
 
 # --- 1.1.2 mount options ---------------------------------------------------
-# Excluded by default: an already-provisioned host cannot be repartitioned from
-# a config-management run. Enabling guac_cis_manage_mounts applies the mount
-# *options* the benchmark wants on the mount points that do exist.
+# 1.1.2 has two halves. The *partitioning* half is excluded by default and stays
+# excluded: an already-provisioned host cannot be repartitioned from a converge,
+# and a half-applied fstab is a host that does not boot. The *mount options* half
+# is a different risk profile, so it keys off its own opt-in variable rather than
+# the exclusion list — otherwise guac_cis_manage_mounts: true would silently do
+# nothing while the default exclusion is in place.
 - name: "1.1.2 — harden mount options on existing mount points"
   ansible.posix.mount:
     path: "{{ item.path }}"
@@ -39,7 +42,6 @@
   when:
     - guac_cis_manage_mounts | bool
     - not cis_in_container | bool
-    - not ('1.1.2' is search(cis_skip_re))
   failed_when: false
 
 - name: "1.1.2 — report mount points that are not separate partitions"

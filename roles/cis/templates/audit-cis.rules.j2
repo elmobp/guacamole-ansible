@@ -116,8 +116,11 @@
 -a always,exit -F path={{ c }} -F perm=x -F auid>=1000 -F auid!=unset -k privileged
 {% endfor %}
 
-{% if guac_cis_auditd_immutable | bool %}
+{% if guac_cis_auditd_immutable | bool and not ('6.3.3.21' is search(cis_skip_re)) %}
 ## 6.3.3.21 — immutable rule set. Once loaded, rules cannot be changed until the
-## next reboot; that is why this is off by default (see docs/CIS.md).
+## next reboot; that is why this is off by default (see docs/CIS.md). It needs
+## BOTH guac_cis_auditd_immutable AND 6.3.3.21 removed from guac_cis_exclusions —
+## the exclusion list is authoritative for every control, and for one that can
+## only be undone by a reboot, "nothing happens" is the right disagreement.
 -e 2
 {% endif %}

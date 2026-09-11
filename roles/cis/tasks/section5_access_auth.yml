@@ -68,16 +68,18 @@
 
 # Created up-front rather than left to the first sudo call: section 6 puts an
 # audit watch on this path, and auditctl rejects a watch on a file that does not
-# exist — taking the rest of the rule file down with it.
+# exist — taking the rest of the rule file down with it. force:false is what
+# makes this safe to re-run: it creates the file when missing and applies the
+# ownership/mode, but never truncates a log that already has entries in it.
+# (Same idiom as the cron.allow/at.allow tasks in section2.)
 - name: "5.2 — sudo log file exists"
-  ansible.builtin.file:
-    path: "{{ guac_cis_sudo_logfile }}"
-    state: touch
+  ansible.builtin.copy:
+    dest: "{{ guac_cis_sudo_logfile }}"
+    content: ""
     owner: root
     group: root
     mode: "0600"
-    access_time: preserve
-    modification_time: preserve
+    force: false
   when: not ('5.2' is search(cis_skip_re))
 
 - name: "5.2.3 — audit sudoers entries that skip authentication"
