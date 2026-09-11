@@ -1,0 +1,322 @@
+name: CIS compliance (OpenSCAP)
+
+# Independent of ci.yml on purpose: this leg is slow, it is expected to be
+# amber-ish for a while (see the threshold discussion below), and keeping it in
+# its own file means ratcheting the score never touches the main CI workflow.
+#
+# What it does, per platform:
+#   1. builds a real Guacamole host with test/run.sh (same containers as CI),
+#      leaving it running (KEEP=1)
+#   2. installs the OpenSCAP scanner + the SCAP Security Guide content INSIDE
+#      that container
+#   3. runs `oscap xccdf eval` against the SSG CIS profile
+#   4. publishes the HTML report + raw results XML as workflow artifacts
+#   5. fails the job if the XCCDF score is below CIS_SCORE_THRESHOLD
+#
+# RAISING THE THRESHOLD
+# --------------------
+#   CIS_SCORE_THRESHOLD starts deliberately lenient at 80. The intent is a
+#   ratchet, not a target: after each green run, look at the published score,
+#   and if it is comfortably above the threshold raise the threshold to just
+#   below the observed score (e.g. observed 91 -> set 88). Never lower it to
+#   make a red build green — either fix the control in roles/cis or add it to
+#   guac_cis_exclusions in group_vars/all.yml WITH a written justification in
+#   docs/CIS.md § Deliberate deviations. An exclusion that is not in that
+#   document is a bug.
+#
+#   Note the score will never be 100. A number of SSG rules are unachievable on
+#   this appliance by design (it IS a web server; it cannot be repartitioned
+#   from a config-management run; the bootloader password needs an operator
+#   secret). docs/CIS.md § Reading the OpenSCAP report explains how to tell an
+#   accepted deviation from a genuine regression.
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'roles/cis/**'
+      - 'roles/hardening/**'
+      - 'roles/common/**'
+      - 'group_vars/all.yml'
+      - 'site.yml'
+      - '.github/workflows/compliance.yml'
+  pull_request:
+    paths:
+      - 'roles/cis/**'
+      - 'roles/hardening/**'
+      - 'roles/common/**'
+      - 'group_vars/all.yml'
+      - 'site.yml'
+      - '.github/workflows/compliance.yml'
+  schedule:
+    # Weekly drift check — SSG content and distro packages move underneath us.
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      threshold:
+        description: 'Minimum XCCDF score to pass (overrides CIS_SCORE_THRESHOLD)'
+        required: false
+        default: ''
+
+concurrency:
+  group: compliance-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Ratchet this up over time — see the block comment at the top of this file.
+  CIS_SCORE_THRESHOLD: "80"
+
+jobs:
+  oscap:
+    name: oscap (${{ matrix.tag }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        # One representative per OS family. Add more tags from test/run.sh's
+        # matrix (ol10, debian13, ubuntu2204, ubuntu2604) once the score on
+        # these three is stable — each one is another ~40 minutes of runner.
+        tag: [ol9, debian12, ubuntu2404]
+    env:
+      DEB_MIRROR: http://deb.debian.org/debian
+      UBU_MIRROR: http://archive.ubuntu.com/ubuntu
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install podman
+        run: sudo apt-get update && sudo apt-get install -y podman
+
+      - name: Restore compiled guacd cache
+        uses: actions/cache@v4
+        with:
+          path: .ci-prebuilt
+          key: guacd-${{ matrix.tag }}-${{ hashFiles('group_vars/all.yml', 'roles/guacd/**') }}
+          restore-keys: |
+            guacd-${{ matrix.tag }}-
+
+      - name: Build the host (KEEP=1 leaves the container up for scanning)
+        env:
+          KEEP: "1"
+          GUAC_PREBUILT_DIR: ${{ github.workspace }}/.ci-prebuilt
+        run: bash test/run.sh "${{ matrix.tag }}"
+
+      - name: Install the OpenSCAP scanner and SSG content
+        run: |
+          set -euo pipefail
+          CTR="guac-test-${{ matrix.tag }}"
+          podman exec "$CTR" bash -lc '
+            set -e
+            if command -v dnf >/dev/null; then
+              # RHEL family: both packages are in the base/appstream repos.
+              dnf -y install openscap-scanner scap-security-guide
+            else
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              # Package names differ across Debian 12/13 and Ubuntu 22.04-26.04:
+              #   libopenscap8      - scanner on older Debian/Ubuntu
+              #   openscap-scanner  - scanner on newer
+              #   ssg-base          - the shared SSG content
+              #   ssg-debian        - Debian datastreams
+              #   ssg-debderived    - Ubuntu (Debian-derived) datastreams
+              # Install each one independently so a missing one is not fatal.
+              for p in openscap-scanner libopenscap8 openscap-utils \
+                       ssg-base ssg-debian ssg-debderived; do
+                apt-get install -y --no-install-recommends "$p" || \
+                  echo "note: $p not available on this release"
+              done
+            fi
+            command -v oscap >/dev/null || { echo "::error::oscap not installed"; exit 1; }
+            oscap --version | head -3
+          '
+
+      - name: Locate the SSG datastream and pick the CIS profile
+        id: profile
+        run: |
+          set -euo pipefail
+          CTR="guac-test-${{ matrix.tag }}"
+          podman exec "$CTR" bash -lc '
+            set -e
+            . /etc/os-release
+            CONTENT=/usr/share/xml/scap/ssg/content
+            [ -d "$CONTENT" ] || { echo "NO_CONTENT"; exit 0; }
+
+            # Prefer the datastream that names this exact distro+version, then
+            # this distro, then anything. OL ships ssg-ol9-ds.xml, RHEL
+            # ssg-rhel9-ds.xml, Ubuntu ssg-ubuntu2404-ds.xml, Debian
+            # ssg-debian12-ds.xml.
+            VER_NODOT=$(echo "${VERSION_ID:-}" | tr -d ".")
+            DS=""
+            for cand in "ssg-${ID}${VER_NODOT}-ds.xml" \
+                        "ssg-${ID}${VERSION_ID%%.*}-ds.xml" \
+                        "ssg-${ID_LIKE%% *}${VERSION_ID%%.*}-ds.xml"; do
+              [ -f "$CONTENT/$cand" ] && { DS="$CONTENT/$cand"; break; }
+            done
+            [ -n "$DS" ] || DS=$(ls "$CONTENT"/ssg-*-ds.xml 2>/dev/null | head -1)
+            [ -n "$DS" ] || { echo "NO_CONTENT"; exit 0; }
+
+            # Profile ids vary: cis_level2_server / cis_level1_server / cis.
+            # guac_cis_level defaults to l2, so prefer the level 2 server profile.
+            PROFILES=$(oscap info --profiles "$DS" 2>/dev/null | cut -d: -f1)
+            PROFILE=""
+            for want in cis_level2_server cis_level1_server cis; do
+              P=$(echo "$PROFILES" | grep -E "_profile_${want}\$" | head -1 || true)
+              [ -n "$P" ] && { PROFILE="$P"; break; }
+            done
+            [ -n "$PROFILE" ] || PROFILE=$(echo "$PROFILES" | grep -i cis | head -1 || true)
+
+            printf "DS=%s\nPROFILE=%s\n" "$DS" "$PROFILE" > /tmp/oscap-target
+            echo "datastream: $DS"
+            echo "profile:    ${PROFILE:-<none found>}"
+            echo "--- profiles offered by this datastream ---"
+            echo "$PROFILES"
+          ' | tee /tmp/profile.log
+
+          if grep -q NO_CONTENT /tmp/profile.log; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          elif grep -qE '^profile: +$|<none found>' /tmp/profile.log; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: No CIS profile shipped for this platform
+        if: steps.profile.outputs.available != 'true'
+        run: |
+          echo "::warning title=No SSG CIS profile::The SCAP Security Guide packaged for" \
+               "${{ matrix.tag }} ships no CIS profile, so there is nothing to evaluate." \
+               "This is a content-availability gap, not a compliance failure —" \
+               "Debian's ssg-debian has historically shipped only the ANSSI profiles." \
+               "See docs/CIS.md for the per-OS benchmark source."
+
+      - name: Run the CIS evaluation
+        if: steps.profile.outputs.available == 'true'
+        run: |
+          set -euo pipefail
+          CTR="guac-test-${{ matrix.tag }}"
+          # oscap exit codes: 0 = every rule passed, 1 = scanner error,
+          # 2 = the scan ran and at least one rule failed (the normal case).
+          podman exec "$CTR" bash -lc '
+            set -e
+            . /tmp/oscap-target
+            oscap xccdf eval \
+              --profile "$PROFILE" \
+              --results /tmp/oscap-results.xml \
+              --report  /tmp/oscap-report.html \
+              --fetch-remote-resources \
+              "$DS" || rc=$?
+            rc=${rc:-0}
+            if [ "$rc" = "1" ]; then
+              echo "::error::oscap scanner error (exit 1)"
+              exit 1
+            fi
+            exit 0
+          '
+
+      - name: Collect the report
+        if: steps.profile.outputs.available == 'true'
+        run: |
+          set -euo pipefail
+          CTR="guac-test-${{ matrix.tag }}"
+          mkdir -p oscap-out
+          podman cp "$CTR:/tmp/oscap-report.html"  "oscap-out/oscap-report-${{ matrix.tag }}.html"
+          podman cp "$CTR:/tmp/oscap-results.xml" "oscap-out/oscap-results-${{ matrix.tag }}.xml"
+          podman cp "$CTR:/tmp/oscap-target"      "oscap-out/oscap-target-${{ matrix.tag }}.txt"
+
+      - name: Publish the report
+        if: steps.profile.outputs.available == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: oscap-${{ matrix.tag }}
+          path: oscap-out/
+          retention-days: 30
+
+      - name: Score gate
+        if: steps.profile.outputs.available == 'true'
+        run: |
+          set -euo pipefail
+          RESULTS="oscap-out/oscap-results-${{ matrix.tag }}.xml"
+          THRESHOLD="${{ github.event.inputs.threshold }}"
+          [ -n "$THRESHOLD" ] || THRESHOLD="$CIS_SCORE_THRESHOLD"
+
+          python3 - "$RESULTS" "$THRESHOLD" "${{ matrix.tag }}" <<'PY'
+          import sys, xml.etree.ElementTree as ET
+
+          results, threshold, tag = sys.argv[1], float(sys.argv[2]), sys.argv[3]
+          root = ET.parse(results).getroot()
+
+          def local(el):
+              return el.tag.rsplit('}', 1)[-1]
+
+          # Per-rule outcomes. "notapplicable" / "notchecked" / "notselected"
+          # are neither wins nor losses and are excluded from the pass rate,
+          # which is what the XCCDF default scoring model does too.
+          counts = {}
+          failed_rules = []
+          for rr in root.iter():
+              if local(rr) != 'rule-result':
+                  continue
+              res = next((c.text for c in rr if local(c) == 'result'), None)
+              counts[res] = counts.get(res, 0) + 1
+              if res in ('fail', 'error'):
+                  failed_rules.append(rr.get('idref', '?'))
+
+          # The scanner's own XCCDF score is the number the HTML report shows, so
+          # gate on exactly that rather than on a second, subtly different sum.
+          # A TestResult carries one <score> per scoring model; take the default
+          # model, falling back to the first score element, then to arithmetic.
+          score = None
+          scores = [el for el in root.iter() if local(el) == 'score' and el.text]
+          for el in scores:
+              if el.get('system', '').endswith('scoring:default'):
+                  score = float(el.text)
+                  break
+          if score is None and scores:
+              score = float(scores[0].text)
+          if score is None:
+              p, f = counts.get('pass', 0), counts.get('fail', 0) + counts.get('error', 0)
+              score = 100.0 * p / (p + f) if (p + f) else 0.0
+
+          print(f"::group::{tag} rule outcomes")
+          for k in sorted(counts):
+              print(f"  {k:<15} {counts[k]}")
+          print("::endgroup::")
+          print(f"::group::{tag} failing rules ({len(failed_rules)})")
+          for r in sorted(failed_rules):
+              print(f"  {r}")
+          print("::endgroup::")
+
+          line = f"{tag}: XCCDF score {score:.2f} (threshold {threshold:.2f})"
+          print(line)
+          with open('scoreline.txt', 'w') as fh:
+              fh.write(line + "\n")
+
+          if score < threshold:
+              print(f"::error title=CIS score below threshold::{line}. "
+                    "Fix the control in roles/cis, or add it to guac_cis_exclusions "
+                    "WITH a justification in docs/CIS.md. Do not lower the threshold.")
+              sys.exit(1)
+          print(f"::notice title=CIS score::{line}")
+          PY
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### CIS compliance — ${{ matrix.tag }}"
+            if [ "${{ steps.profile.outputs.available }}" != "true" ]; then
+              echo "No SSG CIS profile is packaged for this platform — evaluation skipped."
+            elif [ -f scoreline.txt ]; then
+              echo '```'
+              cat scoreline.txt
+              echo '```'
+              echo "Full HTML report: the \`oscap-${{ matrix.tag }}\` artifact on this run."
+            else
+              echo "Evaluation did not complete — see the job log."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Tear down
+        if: always()
+        run: podman rm -f "guac-test-${{ matrix.tag }}" || true
