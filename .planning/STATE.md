@@ -15,9 +15,34 @@ converge-tested together on ol9 (custom-login + CIS L2 + OpenID all enabled at o
 were internal scratch space, deleted after merging, not pushed). Repo working tree clean, no
 containers left running.
 
-Still open, not started this session: independently confirming the CIS agent's two flagged risks
-(inbound SSH forwarding behavior under L2, Debian SSG content-gap) on a real (non-container) host,
-and running the CIS OpenSCAP CI gate for real on GitHub Actions for the first time.
+## SSH-under-CIS-L2 validated 2026-09-11
+
+Treated a podman container as a real host (published sshd on 127.0.0.1:2222, real `ssh` client
+from the laptop — not `podman exec`) to close the CIS agent's flagged risk. Applied
+`ansible-playbook site.yml --tags hardening,cis` (ol9, all defaults incl. `guac_cis_level: l2`):
+
+- **Login survives L2 hardening**: key-based SSH login works before and after; a session opened
+  *before* a hardening re-run stays alive through the re-run, and a brand-new session immediately
+  after also succeeds (the exact "second session before dropping the first" scenario the agent
+  asked for).
+- **`DisableForwarding yes` is genuinely enforced**, not just written to config: `-L` port
+  forwarding produces no reachable local listener (connection refused), while the underlying
+  session and remote commands still execute normally. Effective config confirmed via `sshd -T`:
+  `disableforwarding yes`, `passwordauthentication yes` (unaffected — `guac_hardening_ssh_password_auth`
+  defaults true), `permitrootlogin no`.
+- **`sshd -t` validates** the merged config after CIS applies.
+- **Found (and left as a minor, self-healing quirk, not fixed)**: `cis : Ensure CIS drop-in
+  directories exist` (item `/etc/sudoers.d`) flips 755→?→755 once between the first and second
+  application on a brand-new host — `changed=53` (first apply) → `changed=1` (second, this item
+  only) → `changed=0` (third, stable forever after). Root cause not pinned down (not caused by
+  anything else in `roles/cis/tasks/section5_access_auth.yml` touching that directory); most
+  likely a one-off package-install side effect (`sudo`/`policycoreutils` first being "ensured" in
+  this role's scope) resetting the dir's mode once, self-correcting on the very next run. Cosmetic
+  only — the file that actually matters (`/etc/sudoers.d/60-guac-cis`) is correctly `0440` in every
+  run. Worth a look if it ever recurs on a real (non-fresh) host, but not blocking.
+
+Still open, not started: Debian SSG content-gap check, and running the CIS OpenSCAP CI gate for
+real on GitHub Actions for the first time.
 
 # Project State
 
