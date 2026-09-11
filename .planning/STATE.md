@@ -59,8 +59,13 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
   path, so `get_url` skipped it on a version bump → stale 1.5.5 war + 1.6.0 JDBC extension →
   "not compatible" → all logins 403. War is now `guacamole-<ver>.war` + symlink + stale prune.
   1.5.5→1.6.0 verified live: login OK, idempotent. Clean end-to-end re-run in progress.
+- **`test/upgrade.sh ol9 1.5.5 1.6.0` PASSED** — guacd rebuild + war/jar refresh + schema
+  upgrade + login + idempotent.
+- **SSO auth added** (`1e8529b`): OpenID Connect, SAML, X.509 client-cert, CAS — toggle-driven
+  identity layers over JDBC. Verified on ol9 (all 4 extensions load, nginx -t ok, idempotent).
+  Interactive `scripts/configure.py` writes host_vars and asks the auth method.
 - Still TODO: `podman build` container image smoke, phase-11 source-ref smoke
-  (`-e guac_source_ref=1.6.0` on ol9).
+  (`-e guac_source_ref=1.6.0` on ol9), full 7-distro re-run after SSO change (ol9 baseline running).
 
 ```
 cd ~/Documents/Projects/claude
