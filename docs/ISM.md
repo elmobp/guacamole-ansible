@@ -29,6 +29,19 @@ the statements. JSON has no comment syntax, so the provenance header lives in th
 `.meta.json` rather than in the dataset — keeping the dataset byte-identical to the source means
 the SHA-256 above can be re-verified against the upstream URL at any time.
 
+**Normalisation.** 36 of the published values carry the *next* control appended after a stray
+markdown table separator, for example:
+
+```
+"ism-0427": "... the session lock. | | [ism-0430](/control/ism-0430) | Access to systems, ..."
+```
+
+`scripts/ism_map.py` splits those back out at load time (the raw file is never modified), which is
+why the usable control count is 907 rather than 871. Several genuinely important controls —
+`ism-0408` (logon banner), `ism-0430` (access removal), `ism-0485` (SSH public-key auth),
+`ism-0585` (event record contents), `ism-1564` (POA&M) — exist *only* inside a merged value, and a
+naive load would silently lose them.
+
 ### Why this dataset, and what it is not
 
 Be blunt about this, because an assessor will ask.
@@ -49,26 +62,13 @@ Be blunt about this, because an assessor will ask.
    assessment. §5 is the procedure; step 4 (diff the *statements*, not just the ids) is the one
    that matters.
 2. Treat the abridged statements in the §12 table as *navigation aids*, not as quotations of the
-   ISM. Each row links to the control id so the authoritative text can be looked up.
+   ISM. Every row carries the control id, so the authoritative text is one lookup away.
 3. The **status and the evidence note** in each row are the durable part of this work — they were
    derived from this repository's code and are unaffected by which ISM edition you check them
    against. Only the control numbering is at risk of drift.
 
 Swapping in the official release later is a data change only: replace `ism-controls.json`, update
 the sidecar, re-run the generator, and resolve whatever ids it reports as missing.
-
-**Normalisation.** 36 of the published values carry the *next* control appended after a stray
-markdown table separator, for example:
-
-```
-"ism-0427": "... the session lock. | | [ism-0430](/control/ism-0430) | Access to systems, ..."
-```
-
-`scripts/ism_map.py` splits those back out at load time (the raw file is never modified), which is
-why the usable control count is 907 rather than 871. Several genuinely important controls —
-`ism-0408` (logon banner), `ism-0430` (access removal), `ism-0485` (SSH public-key auth),
-`ism-0585` (event record contents), `ism-1564` (POA&M) — exist *only* inside a merged value, and a
-naive load would silently lose them.
 
 ---
 
