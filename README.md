@@ -14,6 +14,7 @@ No numbered shell scripts — everything is an idempotent role.
 - **[docs/LLD-RHEL-IRAP.md](docs/LLD-RHEL-IRAP.md)** — copy-and-complete low-level design for a RHEL build, with a scoped Australian ISM control mapping (§12) and POA&M seed (§12.2)
 - **[docs/ISM.md](docs/ISM.md)** — how that ISM mapping was derived, its dataset caveats, and how to refresh it (`python3 scripts/ism_map.py`)
 - **[docs/architecture.drawio](docs/architecture.drawio)** — data-flow architecture diagram (open in [draw.io](https://app.diagrams.net))
+- **[docs/manual/](docs/manual/)** — the full operator manual, no Ansible knowledge assumed; build it to PDF with `make manual`
 
 **Supported platforms**
 
