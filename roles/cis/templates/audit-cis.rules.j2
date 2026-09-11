@@ -1,0 +1,126 @@
+# {{ ansible_managed }}  — CIS 6.3.3 audit rule set
+#
+# auditd unions every *.rules file in /etc/audit/rules.d. roles/hardening owns
+# 90-guac-hardening.rules (the baseline subset); this file adds the rest of the
+# benchmark. Duplicate watches between the two are harmless — auditctl collapses
+# identical rules.
+#
+# The privileged-command rules below are generated from the setuid/setgid
+# binaries that actually exist on this host, enumerated AFTER every package
+# install in the play so the rendered file is stable across converges.
+
+#
+# auditctl refuses a watch on a path that does not exist and then SKIPS THE REST
+# OF THE FILE, so every path that is not guaranteed on all nine supported
+# platforms is emitted only when section6 stat'd it as present. `_present` is
+# that list. (Ubuntu 26.04 ships neither /var/log/lastlog nor /var/log/wtmp.)
+{% set _present = cis_audit_paths_present | default([]) %}
+
+## Buffer and failure mode (6.3.3.1). No "-D" here on purpose: augenrules
+## concatenates rules.d in filename order, and a second "-D" in a later-sorting
+## file silently deletes everything the earlier files loaded.
+-b {{ guac_cis_auditd_backlog_limit }}
+--backlog_wait_time 60000
+-f 1
+
+## 6.3.3.2 — actions taken by another user (sudo/su)
+-a always,exit -F arch=b64 -C euid!=uid -F auid!=unset -S execve -k user_emulation
+-a always,exit -F arch=b32 -C euid!=uid -F auid!=unset -S execve -k user_emulation
+
+## 6.3.3.3 — sudo log file
+-w {{ guac_cis_sudo_logfile }} -p wa -k sudo_log_file
+
+## 6.3.3.4 — date/time modification
+-a always,exit -F arch=b64 -S adjtimex,settimeofday,clock_settime -k time-change
+-a always,exit -F arch=b32 -S adjtimex,settimeofday,clock_settime,stime -k time-change
+-w /etc/localtime -p wa -k time-change
+
+## 6.3.3.5 — network environment
+-a always,exit -F arch=b64 -S sethostname,setdomainname -k system-locale
+-a always,exit -F arch=b32 -S sethostname,setdomainname -k system-locale
+-w /etc/issue -p wa -k system-locale
+-w /etc/issue.net -p wa -k system-locale
+-w /etc/hosts -p wa -k system-locale
+-w /etc/hostname -p wa -k system-locale
+{% for p in cis_audit_watch_present | default([]) %}
+-w {{ p }} -p wa -k system-locale
+{% endfor %}
+
+## 6.3.3.6 — privilege escalation / user and group information
+-w /etc/group -p wa -k identity
+-w /etc/passwd -p wa -k identity
+-w /etc/gshadow -p wa -k identity
+-w /etc/shadow -p wa -k identity
+-w /etc/nsswitch.conf -p wa -k identity
+-w /etc/pam.d/ -p wa -k identity
+-w /etc/security/ -p wa -k identity
+{% for p in ['/etc/security/opasswd', '/etc/pam.conf'] if p in _present %}
+-w {{ p }} -p wa -k identity
+{% endfor %}
+
+## 6.3.3.7 — mandatory access control policy
+{% if ansible_os_family == 'RedHat' %}
+-w /etc/selinux/ -p wa -k MAC-policy
+-w /usr/share/selinux/ -p wa -k MAC-policy
+{% else %}
+-w /etc/apparmor/ -p wa -k MAC-policy
+-w /etc/apparmor.d/ -p wa -k MAC-policy
+{% endif %}
+
+## 6.3.3.8 — login and logout events
+{% for p in ['/var/log/lastlog', '/var/run/faillock'] if p in _present %}
+-w {{ p }} -p wa -k logins
+{% endfor %}
+
+## 6.3.3.9 — session initiation information
+{% for p in ['/var/run/utmp', '/var/log/wtmp', '/var/log/btmp'] if p in _present %}
+-w {{ p }} -p wa -k session
+{% endfor %}
+
+## 6.3.3.10 — discretionary access control permission modification
+-a always,exit -F arch=b64 -S chmod,fchmod,fchmodat,chown,fchown,fchownat,lchown -F auid>=1000 -F auid!=unset -k perm_mod
+-a always,exit -F arch=b32 -S chmod,fchmod,fchmodat,chown,fchown,fchownat,lchown -F auid>=1000 -F auid!=unset -k perm_mod
+-a always,exit -F arch=b64 -S setxattr,lsetxattr,fsetxattr,removexattr,lremovexattr,fremovexattr -F auid>=1000 -F auid!=unset -k perm_mod
+-a always,exit -F arch=b32 -S setxattr,lsetxattr,fsetxattr,removexattr,lremovexattr,fremovexattr -F auid>=1000 -F auid!=unset -k perm_mod
+
+## 6.3.3.11 — unsuccessful file access attempts
+-a always,exit -F arch=b64 -S creat,open,openat,truncate,ftruncate -F exit=-EACCES -F auid>=1000 -F auid!=unset -k access
+-a always,exit -F arch=b32 -S creat,open,openat,truncate,ftruncate -F exit=-EACCES -F auid>=1000 -F auid!=unset -k access
+-a always,exit -F arch=b64 -S creat,open,openat,truncate,ftruncate -F exit=-EPERM -F auid>=1000 -F auid!=unset -k access
+-a always,exit -F arch=b32 -S creat,open,openat,truncate,ftruncate -F exit=-EPERM -F auid>=1000 -F auid!=unset -k access
+
+## 6.3.3.12 — successful file system mounts
+-a always,exit -F arch=b64 -S mount -F auid>=1000 -F auid!=unset -k mounts
+-a always,exit -F arch=b32 -S mount -F auid>=1000 -F auid!=unset -k mounts
+
+## 6.3.3.13 — session termination / file deletion by users
+-a always,exit -F arch=b64 -S unlink,unlinkat,rename,renameat -F auid>=1000 -F auid!=unset -k delete
+-a always,exit -F arch=b32 -S unlink,unlinkat,rename,renameat -F auid>=1000 -F auid!=unset -k delete
+
+## 6.3.3.14 — changes to system administration scope
+-w /etc/sudoers -p wa -k scope
+-w /etc/sudoers.d/ -p wa -k scope
+
+## 6.3.3.15 — kernel module loading, unloading and modification
+-a always,exit -F arch=b64 -S init_module,finit_module,delete_module,create_module,query_module -F auid>=1000 -F auid!=unset -k kernel_modules
+-a always,exit -F arch=b32 -S init_module,finit_module,delete_module,create_module,query_module -F auid>=1000 -F auid!=unset -k kernel_modules
+{% if '/usr/bin/kmod' in _present %}
+-w /usr/bin/kmod -p x -k kernel_modules
+{% endif %}
+
+## 6.3.3.16 — Guacamole application configuration (site-specific, not CIS)
+-w {{ guac_home }}/ -p wa -k guacamole-config
+
+## 6.3.3.17 — privileged commands present on this host
+{% for c in (_cis_privcmds.stdout_lines | default([])) | sort %}
+-a always,exit -F path={{ c }} -F perm=x -F auid>=1000 -F auid!=unset -k privileged
+{% endfor %}
+
+{% if guac_cis_auditd_immutable | bool and not ('6.3.3.21' is search(cis_skip_re)) %}
+## 6.3.3.21 — immutable rule set. Once loaded, rules cannot be changed until the
+## next reboot; that is why this is off by default (see docs/CIS.md). It needs
+## BOTH guac_cis_auditd_immutable AND 6.3.3.21 removed from guac_cis_exclusions —
+## the exclusion list is authoritative for every control, and for one that can
+## only be undone by a reboot, "nothing happens" is the right disagreement.
+-e 2
+{% endif %}

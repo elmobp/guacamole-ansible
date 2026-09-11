@@ -1,0 +1,305 @@
+---
+# =============================================================================
+# CIS Section 5 — Access, Authentication and Authorisation
+#   5.1 SSH server
+#   5.2 sudo / privilege escalation
+#   5.3 PAM (pwquality, faillock, pwhistory, pam_unix)
+#   5.4 User accounts and environment
+#
+# roles/hardening already owns /etc/ssh/sshd_config.d/50-guac-hardening.conf.
+# This role adds 60-guac-cis.conf with only the keys the hardening drop-in does
+# NOT set: sshd takes the first value it sees, so 50- deliberately wins on any
+# overlap and the two files can never fight.
+# =============================================================================
+
+# --- 5.1 SSH server --------------------------------------------------------
+- name: "5.1 — CIS sshd drop-in"
+  ansible.builtin.template:
+    src: sshd-cis.conf.j2
+    dest: /etc/ssh/sshd_config.d/60-guac-cis.conf
+    owner: root
+    group: root
+    mode: "0600"
+    validate: "sshd -t -f %s"
+  when: not ('5.1' is search(cis_skip_re))
+  failed_when: false
+  notify: Restart sshd (cis)
+
+- name: "5.1.1 — sshd_config is root-owned and unreadable by others"
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config
+    owner: root
+    group: root
+    mode: "0600"
+  when: not ('5.1.1' is search(cis_skip_re))
+  failed_when: false
+
+- name: "5.1.2/5.1.3 — locate the SSH host keys"
+  ansible.builtin.find:
+    paths: /etc/ssh
+    patterns: ["ssh_host_*_key", "ssh_host_*_key.pub"]
+    file_type: file
+  register: _cis_hostkeys
+  changed_when: false
+  when: not ('5.1.2' is search(cis_skip_re))
+
+- name: "5.1.2/5.1.3 — SSH host key permissions"
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ '0644' if item.path.endswith('.pub') else '0600' }}"
+  loop: "{{ _cis_hostkeys.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when: not ('5.1.2' is search(cis_skip_re))
+  failed_when: false
+
+# --- 5.2 sudo --------------------------------------------------------------
+- name: "5.2 — sudo defaults (pty, log file, re-authentication)"
+  ansible.builtin.template:
+    src: sudoers-cis.j2
+    dest: /etc/sudoers.d/60-guac-cis
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+  when: not ('5.2' is search(cis_skip_re))
+
+# Created up-front rather than left to the first sudo call: section 6 puts an
+# audit watch on this path, and auditctl rejects a watch on a file that does not
+# exist — taking the rest of the rule file down with it. force:false is what
+# makes this safe to re-run: it creates the file when missing and applies the
+# ownership/mode, but never truncates a log that already has entries in it.
+# (Same idiom as the cron.allow/at.allow tasks in section2.)
+- name: "5.2 — sudo log file exists"
+  ansible.builtin.copy:
+    dest: "{{ guac_cis_sudo_logfile }}"
+    content: ""
+    owner: root
+    group: root
+    mode: "0600"
+    force: false
+  when: not ('5.2' is search(cis_skip_re))
+
+- name: "5.2.3 — audit sudoers entries that skip authentication"
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      grep -rPh '^[^#].*NOPASSWD' /etc/sudoers /etc/sudoers.d/ 2>/dev/null || true
+    executable: /bin/bash
+  register: _cis_nopasswd
+  changed_when: false
+  failed_when: false
+  when: not ('5.2.3' is search(cis_skip_re))
+
+# --- 5.3 PAM ---------------------------------------------------------------
+- name: "5.3 — PAM tunable directories"
+  ansible.builtin.file:
+    path: /etc/security/pwquality.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: "5.3.3.2 — password quality requirements (pam_pwquality)"
+  ansible.builtin.template:
+    src: pwquality-cis.conf.j2
+    dest: /etc/security/pwquality.conf.d/60-guac-cis.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - guac_cis_pam_pwquality | bool
+    - not ('5.3.3.2' is search(cis_skip_re))
+
+- name: "5.3.3.1 — account lockout tunables (pam_faillock)"
+  ansible.builtin.template:
+    src: faillock-cis.conf.j2
+    dest: /etc/security/faillock.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - guac_cis_pam_faillock | bool
+    - not ('5.3.3.1' is search(cis_skip_re))
+
+- name: "5.3.3.3 — password history tunables (pam_pwhistory)"
+  ansible.builtin.copy:
+    dest: /etc/security/pwhistory.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible (ansible-guacamole)
+      remember = {{ guac_cis_pwhistory_remember }}
+      enforce_for_root
+      use_authtok
+  when:
+    - guac_cis_pam_pwhistory | bool
+    - not ('5.3.3.3' is search(cis_skip_re))
+
+# RedHat family: authselect is the only supported way to edit the PAM stack.
+# Features are enabled one at a time and only when `authselect current` shows
+# them missing, so a converged host reports no change.
+- name: "5.3.2/5.3.3 — enable PAM features via authselect (RedHat)"
+  when:
+    - ansible_os_family == "RedHat"
+    - not ('5.3.3' is search(cis_skip_re))
+  block:
+    - name: "5.3.2 — read the active authselect profile"
+      ansible.builtin.command: authselect current
+      register: _cis_authselect
+      changed_when: false
+      failed_when: false
+
+    - name: "5.3.3 — enable the CIS authselect features"
+      ansible.builtin.command: "authselect enable-feature {{ item.feature }}"
+      loop:
+        - { feature: with-faillock, want: "{{ guac_cis_pam_faillock }}" }
+        - { feature: with-pwhistory, want: "{{ guac_cis_pam_pwhistory }}" }
+        - { feature: without-nullok, want: true }
+      loop_control:
+        label: "{{ item.feature }}"
+      register: _cis_authselect_feat
+      changed_when: _cis_authselect_feat.rc == 0
+      failed_when: false
+      when:
+        - _cis_authselect.rc | default(1) == 0
+        - item.want | bool
+        - item.feature not in (_cis_authselect.stdout | default(''))
+
+    - name: "5.3.3 — apply the authselect changes"
+      ansible.builtin.command: authselect apply-changes
+      changed_when: false
+      failed_when: false
+      when: _cis_authselect_feat is changed
+
+# Debian family: pam-auth-update drives the shared stack. The pwquality profile
+# ships with libpam-pwquality and is enabled by the package itself. The faillock
+# profile is installed here but only activated when guac_cis_pam_faillock_debian
+# is set — see docs/CIS.md § Exclusions for why that default is false.
+- name: "5.3.3.1 — pam_faillock profile for pam-auth-update (Debian)"
+  ansible.builtin.template:
+    src: pam-config-faillock.j2
+    dest: /usr/share/pam-configs/guac-cis-faillock
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - ansible_os_family == "Debian"
+    - guac_cis_pam_faillock | bool
+    - guac_cis_pam_faillock_debian | bool
+    - not ('5.3.3.1' is search(cis_skip_re))
+  notify: Update PAM profiles
+
+- name: "5.3.3.1 — remove the faillock PAM profile when disabled (Debian)"
+  ansible.builtin.file:
+    path: /usr/share/pam-configs/guac-cis-faillock
+    state: absent
+  when:
+    - ansible_os_family == "Debian"
+    - not (guac_cis_pam_faillock_debian | bool)
+  notify: Update PAM profiles
+
+# --- 5.4 user accounts and environment ------------------------------------
+- name: "5.4.1 — password ageing and hashing policy in login.defs"
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^#?\s*{{ item.k }}\s'
+    line: "{{ item.k }}\t{{ item.v }}"
+  loop:
+    - { k: PASS_MAX_DAYS, v: "{{ guac_cis_password_max_days }}" }
+    - { k: PASS_MIN_DAYS, v: "{{ guac_cis_password_min_days }}" }
+    - { k: PASS_WARN_AGE, v: "{{ guac_cis_password_warn_age }}" }
+    - { k: UMASK, v: "{{ guac_cis_umask }}" }
+    - { k: ENCRYPT_METHOD, v: "{{ 'YESCRYPT' if ansible_os_family == 'Debian' else 'SHA512' }}" }
+    - { k: SHA_CRYPT_MIN_ROUNDS, v: "640000" }
+  when: not ('5.4.1' is search(cis_skip_re))
+  failed_when: false
+
+- name: "5.4.1.4 — inactive password lock for new accounts"
+  ansible.builtin.lineinfile:
+    path: /etc/default/useradd
+    regexp: '^#?\s*INACTIVE='
+    line: "INACTIVE={{ guac_cis_password_inactive_days }}"
+    create: false
+  when: not ('5.4.1' is search(cis_skip_re))
+  failed_when: false
+
+- name: "5.4.3 — default shell timeout and umask for interactive sessions"
+  ansible.builtin.template:
+    src: profile-cis.sh.j2
+    dest: /etc/profile.d/60-guac-cis.sh
+    owner: root
+    group: root
+    mode: "0644"
+  when: not ('5.4.3' is search(cis_skip_re))
+
+# --- 5.4.2 root / system accounts -----------------------------------------
+- name: "5.4.2.x — restrict su(1) to an explicit group"
+  when:
+    - guac_cis_restrict_su | bool
+    - cis_l2 | bool
+    - not ('5.4.2' is search(cis_skip_re))
+  block:
+    - name: "5.4.2 — create the su group"
+      ansible.builtin.group:
+        name: "{{ guac_cis_su_group }}"
+        state: present
+        system: true
+
+    # pam_wheel always lets uid 0 through, so root and sudo -i keep working;
+    # everyone else must be a member of an (intentionally empty) group.
+    - name: "5.4.2 — pam_wheel on su"
+      ansible.builtin.lineinfile:
+        path: /etc/pam.d/su
+        regexp: '^auth\s+required\s+pam_wheel\.so'
+        line: "auth       required    pam_wheel.so use_uid group={{ guac_cis_su_group }}"
+        insertafter: '^auth\s+sufficient\s+pam_rootok\.so'
+        create: false
+      failed_when: false
+
+- name: "5.4.2.x — enumerate system accounts that still have a login shell"
+  ansible.builtin.command:
+    argv:
+      - awk
+      - -F:
+      - '($3 < 1000) && ($1 != "root") && ($7 !~ /(nologin|false)$/) { print $1 }'
+      - /etc/passwd
+  register: _cis_shell_accounts
+  changed_when: false
+  failed_when: false
+  when:
+    - guac_cis_lock_system_accounts | bool
+    - not ('5.4.2' is search(cis_skip_re))
+
+- name: "5.4.2.x — system accounts get nologin"
+  ansible.builtin.user:
+    name: "{{ item }}"
+    shell: /sbin/nologin
+  loop: "{{ (_cis_shell_accounts.stdout_lines | default([])) | difference(guac_cis_nologin_exempt) }}"
+  when:
+    - guac_cis_lock_system_accounts | bool
+    - not ('5.4.2' is search(cis_skip_re))
+  failed_when: false
+
+- name: "5.4.2.x — accounts with an empty password"
+  ansible.builtin.command:
+    argv:
+      - awk
+      - -F:
+      - '($2 == "") { print $1 }'
+      - /etc/shadow
+  register: _cis_empty_pw
+  changed_when: false
+  failed_when: false
+  when: not ('5.4.2' is search(cis_skip_re))
+
+- name: "5.4.2.x — lock accounts with an empty password"
+  ansible.builtin.user:
+    name: "{{ item }}"
+    password_lock: true
+  loop: "{{ _cis_empty_pw.stdout_lines | default([]) }}"
+  when: not ('5.4.2' is search(cis_skip_re))
+  failed_when: false

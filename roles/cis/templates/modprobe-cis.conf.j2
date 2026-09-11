@@ -1,0 +1,12 @@
+# {{ ansible_managed }}  — CIS 1.1.1 / 3.2 unused kernel modules
+# Level 1 controls apply to every profile; the Level 2 block is added only when
+# guac_cis_level is "l2".
+{% set _fs = ['cramfs', 'freevxfs', 'hfs', 'hfsplus', 'jffs2', 'squashfs', 'udf'] %}
+{% set _mods = _fs + guac_cis_blacklist_modules_net %}
+{% if cis_l2 | bool %}
+{% set _mods = _mods + ['usb-storage'] + guac_cis_blacklist_modules_l2 %}
+{% endif %}
+{% for m in _mods %}
+install {{ m }} /bin/false
+blacklist {{ m }}
+{% endfor %}

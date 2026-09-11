@@ -1,0 +1,68 @@
+---
+# CIS Debian 12 / CIS Ubuntu 22.04-24.04 LTS Benchmark — Debian-family specifics.
+
+cis_benchmark_name: >-
+  CIS {{ 'Ubuntu Linux ' ~ ansible_distribution_version ~ ' LTS' if ansible_distribution == 'Ubuntu'
+  else 'Debian Linux ' ~ ansible_distribution_major_version }} Benchmark
+
+# --- package sets ----------------------------------------------------------
+cis_required_packages:
+  - apparmor
+  - apparmor-utils
+  - auditd
+  - rsyslog
+  - libpam-pwquality
+  - sudo
+cis_aide_packages: [aide, aide-common]
+# aideinit writes aide.db.new then installs it as aide.db; guard on the final db.
+cis_aide_db_new: "/var/lib/aide/aide.db"
+cis_aide_db: "/var/lib/aide/aide.db"
+
+cis_server_packages_absent:
+  - autofs
+  - avahi-daemon
+  - isc-dhcp-server
+  - bind9
+  - dnsmasq
+  - samba
+  - vsftpd
+  - dovecot-core
+  - dovecot-imapd
+  - slapd
+  - nfs-kernel-server
+  - ypserv
+  - cups
+  - rpcbind
+  - snmpd
+  - telnetd
+  - tftpd-hpa
+  - xinetd
+  - squid
+  - apache2
+  - xserver-common
+  - nis
+
+cis_client_packages_absent:
+  - telnet
+  - ftp
+  - tftp
+  - ypbind
+  - ldap-utils
+  - talk
+  - rsh-client
+
+cis_services_masked: ["rsync.service"]
+
+# --- paths -----------------------------------------------------------------
+cis_shadow_group: "shadow"
+cis_grub_cfg_paths:
+  - /boot/grub/grub.cfg
+  - /boot/grub/grubenv
+cis_grub_user_cfg: "/etc/grub.d/40_custom_guac_cis"
+cis_audit_plugins_dir: "/etc/audit/plugins.d"
+cis_sshd_service: "ssh"
+cis_chrony_service: "chrony"
+cis_cron_service: "cron"
+cis_firewall_backend: "ufw"
+cis_pam_password_file: "/etc/pam.d/common-password"
+cis_pam_system_file: "/etc/pam.d/common-auth"

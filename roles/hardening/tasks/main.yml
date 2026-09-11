@@ -344,3 +344,8 @@
 - name: App-layer hardening
   ansible.builtin.include_tasks: app_layer.yml
   when: guac_hardening_enabled | bool
+
+# Full CIS Benchmark coverage (Phase 15) lives in roles/cis and is wired into
+# site.yml as its own role step immediately after this one — see the comment
+# there for the ordering rationale. It is toggled by guac_cis_enabled, which is
+# deliberately independent of guac_hardening_enabled.

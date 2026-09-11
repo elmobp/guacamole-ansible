@@ -1,0 +1,72 @@
+---
+# CIS Red Hat Enterprise Linux 9/10 Benchmark — RedHat-family specifics.
+
+cis_benchmark_name: "CIS Red Hat Enterprise Linux {{ ansible_distribution_major_version }} Benchmark"
+
+# --- package sets ----------------------------------------------------------
+# 1.3.1.1 / 6.1 / 5.3.1 — packages the benchmark requires to be present.
+cis_required_packages:
+  - libselinux
+  - audit
+  - audit-libs
+  - rsyslog
+  - libpwquality
+  - sudo
+cis_aide_packages: [aide]
+cis_aide_db_new: "/var/lib/aide/aide.db.new.gz"
+cis_aide_db: "/var/lib/aide/aide.db.gz"
+
+# 2.1.x — server services the benchmark requires to be absent.
+cis_server_packages_absent:
+  - autofs
+  - avahi
+  - avahi-autoipd
+  - dhcp-server
+  - bind
+  - dnsmasq
+  - samba
+  - vsftpd
+  - dovecot
+  - cyrus-imapd
+  - openldap-servers
+  - ypserv
+  - cups
+  - rpcbind
+  - net-snmp
+  - telnet-server
+  - tftp-server
+  - xinetd
+  - squid
+  - httpd
+  - xorg-x11-server-common
+  - setroubleshoot            # 1.3.1.7
+  - mcstrans                  # 1.3.1.8
+  - iptables-services         # 4.x — exactly one firewall (firewalld wins here)
+
+# 2.2.x — client packages the benchmark requires to be absent.
+cis_client_packages_absent:
+  - telnet
+  - ftp
+  - tftp
+  - ypbind
+  - openldap-clients
+  - talk
+  - rsh
+
+# 2.1.x — services that stay installed but must not be running.
+cis_services_masked: ["rsyncd.service"]
+
+# --- paths -----------------------------------------------------------------
+cis_shadow_group: "root"
+cis_grub_cfg_paths:
+  - /boot/grub2/grub.cfg
+  - /boot/grub2/grubenv
+  - /boot/grub2/user.cfg
+cis_grub_user_cfg: "/boot/grub2/user.cfg"
+cis_audit_plugins_dir: "/etc/audit/plugins.d"
+cis_sshd_service: "sshd"
+cis_chrony_service: "chronyd"
+cis_cron_service: "crond"
+cis_firewall_backend: "firewalld"
+cis_pam_password_file: "/etc/pam.d/password-auth"
+cis_pam_system_file: "/etc/pam.d/system-auth"

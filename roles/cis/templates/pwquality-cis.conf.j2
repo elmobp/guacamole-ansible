@@ -1,0 +1,13 @@
+# {{ ansible_managed }}  — CIS 5.3.3.2 password quality (pam_pwquality)
+minlen = {{ guac_cis_pwquality.minlen }}
+dcredit = {{ guac_cis_pwquality.dcredit }}
+ucredit = {{ guac_cis_pwquality.ucredit }}
+ocredit = {{ guac_cis_pwquality.ocredit }}
+lcredit = {{ guac_cis_pwquality.lcredit }}
+difok = {{ guac_cis_pwquality.difok }}
+maxrepeat = {{ guac_cis_pwquality.maxrepeat }}
+maxsequence = {{ guac_cis_pwquality.maxsequence }}
+dictcheck = {{ guac_cis_pwquality.dictcheck }}
+{% if guac_cis_pwquality.enforce_for_root %}
+enforce_for_root
+{% endif %}

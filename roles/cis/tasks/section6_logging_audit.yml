@@ -1,0 +1,303 @@
+---
+# =============================================================================
+# CIS Section 6 — Logging and Auditing
+#   6.1 Filesystem integrity checking (AIDE)
+#   6.2 System logging (journald, rsyslog, logrotate, log file permissions)
+#   6.3 auditd (service, data retention, rule set, tool permissions)
+#
+# roles/hardening owns remote syslog forwarding (guac_syslog_target) and the
+# baseline 90-guac-hardening.rules file. This role adds the full CIS rule set as
+# a separate 60-guac-cis.rules so the two never overwrite each other; auditd
+# unions every file in /etc/audit/rules.d.
+# =============================================================================
+
+# --- 6.1 AIDE -------------------------------------------------------------
+- name: "6.1 — filesystem integrity checking"
+  when:
+    - guac_cis_aide_enabled | bool
+    - not ('6.1' is search(cis_skip_re))
+  block:
+    - name: "6.1.1 — AIDE installed"
+      ansible.builtin.package:
+        name: "{{ cis_aide_packages }}"
+        state: present
+      register: _cis_aide_pkg
+      until: _cis_aide_pkg is succeeded
+      retries: 3
+      delay: 10
+
+    # Volatile trees would make every --check noisy: the compile area, the live
+    # MariaDB datadir, session recordings and the backup bundles.
+    - name: "6.1.1 — AIDE excludes volatile and build trees (RedHat)"
+      ansible.builtin.blockinfile:
+        path: /etc/aide.conf
+        marker: "# {mark} ANSIBLE guac CIS exclusions"
+        block: "{{ cis_aide_exclusions | map('regex_replace', '^', '!') | join('\n') }}"
+        create: false
+      when: ansible_os_family == "RedHat"
+      failed_when: false
+
+    - name: "6.1.1 — AIDE excludes volatile and build trees (Debian)"
+      ansible.builtin.copy:
+        dest: /etc/aide/aide.conf.d/60_guac_cis
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by Ansible (ansible-guacamole)
+          {% for p in cis_aide_exclusions %}
+          !{{ p }}
+          {% endfor %}
+      when: ansible_os_family == "Debian"
+      failed_when: false
+
+    # `aide --init` walks the whole filesystem. `creates:` makes it a one-shot,
+    # and it is skipped entirely inside build/test containers where the result
+    # is thrown away and the walk costs minutes.
+    - name: "6.1.1 — initialise the AIDE database"
+      ansible.builtin.command:
+        cmd: "{{ 'aideinit -y -f' if ansible_os_family == 'Debian' else 'aide --init' }}"
+        creates: "{{ cis_aide_db_new }}"
+      when: not cis_in_container | bool
+      failed_when: false
+
+    - name: "6.1.1 — activate the freshly built AIDE database"
+      ansible.builtin.command:
+        cmd: "mv -n {{ cis_aide_db_new }} {{ cis_aide_db }}"
+        creates: "{{ cis_aide_db }}"
+      when:
+        - ansible_os_family == "RedHat"
+        - not cis_in_container | bool
+      failed_when: false
+
+    - name: "6.1.2 — schedule the AIDE integrity check"
+      ansible.builtin.copy:
+        dest: "/etc/systemd/system/{{ item.name }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: "{{ item.content }}"
+      loop:
+        - name: guac-aide-check.service
+          content: |
+            # Managed by Ansible (ansible-guacamole)
+            [Unit]
+            Description=CIS 6.1.2 — AIDE filesystem integrity check
+
+            [Service]
+            Type=oneshot
+            ExecStart=/usr/sbin/aide --check
+            SuccessExitStatus=0 1 2 3 4 5 6 7
+        - name: guac-aide-check.timer
+          content: |
+            # Managed by Ansible (ansible-guacamole)
+            [Unit]
+            Description=CIS 6.1.2 — scheduled AIDE integrity check
+
+            [Timer]
+            OnCalendar={{ guac_cis_aide_cron_oncalendar }}
+            Persistent=true
+
+            [Install]
+            WantedBy=timers.target
+      loop_control:
+        label: "{{ item.name }}"
+      notify: Reload systemd (cis)
+
+    # enabled-only would leave the timer inactive until the next reboot, so the
+    # control would be "configured" but not actually running. daemon_reload here
+    # rather than relying on the handler: the handler only fires at the end of
+    # the play, which is after this task.
+    - name: "6.1.2 — enable and start the AIDE timer"
+      ansible.builtin.systemd:
+        name: guac-aide-check.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+      when: not cis_in_container | bool
+      failed_when: false
+
+# --- 6.2 system logging ---------------------------------------------------
+- name: "6.2.1 — journald configuration"
+  ansible.builtin.template:
+    src: journald-cis.conf.j2
+    dest: /etc/systemd/journald.conf.d/60-guac-cis.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: not ('6.2.1' is search(cis_skip_re))
+  notify: Restart journald
+
+- name: "6.2.2 — rsyslog default file creation mode and ownership"
+  ansible.builtin.copy:
+    dest: /etc/rsyslog.d/60-guac-cis.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible (ansible-guacamole)
+      $FileCreateMode 0640
+      $FileOwner root
+      $FileGroup {{ 'adm' if ansible_os_family == 'Debian' else 'root' }}
+      $umask 0027
+  when: not ('6.2.2' is search(cis_skip_re))
+  notify: Restart rsyslog (cis)
+
+- name: "6.2.2 — rsyslog enabled"
+  ansible.builtin.service:
+    name: rsyslog
+    enabled: true
+  when:
+    - not cis_in_container | bool
+    - not ('6.2.2' is search(cis_skip_re))
+  failed_when: false
+
+- name: "6.2.4 — log file permissions"
+  ansible.builtin.file:
+    path: /var/log
+    state: directory
+    owner: root
+    group: "{{ 'syslog' if ansible_os_family == 'Debian' else 'root' }}"
+    mode: "0755"
+  when: not ('6.2.4' is search(cis_skip_re))
+  failed_when: false
+
+- name: "6.2.4 — logrotate does not widen log permissions"
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/60-guac-cis
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible (ansible-guacamole)
+      # CIS 6.2.4 — anything logrotate creates stays 0640 root:{{ 'adm' if ansible_os_family == 'Debian' else 'root' }}
+      {{ guac_cis_audit_report_path }} {{ guac_cis_sudo_logfile }} {
+          weekly
+          rotate 13
+          missingok
+          notifempty
+          compress
+          delaycompress
+          create 0640 root {{ 'adm' if ansible_os_family == 'Debian' else 'root' }}
+      }
+  when: not ('6.2.4' is search(cis_skip_re))
+
+# --- 6.3 auditd -----------------------------------------------------------
+- name: "6.3 — auditd"
+  when:
+    - guac_cis_auditd_enabled | bool
+    - not ('6.3' is search(cis_skip_re))
+  block:
+    - name: "6.3.1 — auditd installed"
+      ansible.builtin.package:
+        name: "{{ 'audit' if ansible_os_family == 'RedHat' else 'auditd' }}"
+        state: present
+
+    - name: "6.3.2 — audit data retention"
+      ansible.builtin.lineinfile:
+        path: /etc/audit/auditd.conf
+        regexp: '^\s*#?\s*{{ item.k }}\s*='
+        line: "{{ item.k }} = {{ item.v }}"
+        create: false
+      loop:
+        - { k: max_log_file, v: "{{ guac_cis_auditd_max_log_file }}" }
+        - { k: num_logs, v: "{{ guac_cis_auditd_num_logs }}" }
+        - { k: max_log_file_action, v: "{{ guac_cis_auditd_max_log_file_action }}" }
+        - { k: space_left_action, v: "{{ guac_cis_auditd_space_left_action }}" }
+        - { k: admin_space_left_action, v: "{{ guac_cis_auditd_admin_space_left_action }}" }
+        - { k: disk_full_action, v: "{{ guac_cis_auditd_disk_full_action }}" }
+        - { k: disk_error_action, v: "{{ guac_cis_auditd_disk_error_action }}" }
+      failed_when: false
+      notify: Restart auditd (cis)
+
+    # Enumerating the privileged (setuid/setgid) binaries has to happen after
+    # every package install in this play, otherwise the generated rule file
+    # differs between converge 1 and converge 2 and the idempotence gate trips.
+    # This is the last package-dependent step in the role for exactly that reason.
+    - name: "6.3.3 — enumerate privileged commands"
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail;
+          find /usr/bin /usr/sbin /bin /sbin -xdev \( -perm -4000 -o -perm -2000 \)
+          -type f 2>/dev/null | sort -u
+        executable: /bin/bash
+      register: _cis_privcmds
+      changed_when: false
+      failed_when: false
+
+    # auditctl rejects a watch on a path that does not exist AND skips the rest
+    # of the file after it, so every optional watch path is filtered down to
+    # what is really on this host. See cis_audit_optional_paths in defaults for
+    # why this matters (Ubuntu 26.04 dropped /var/log/lastlog and /var/log/wtmp).
+    - name: "6.3.3 — which optional audit watch paths exist"
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: "{{ cis_audit_network_paths + cis_audit_optional_paths }}"
+      register: _cis_watch_stat
+      changed_when: false
+
+    - name: "6.3.3 — collect the audit watch paths"
+      ansible.builtin.set_fact:
+        cis_audit_paths_present: >-
+          {{ _cis_watch_stat.results
+             | selectattr('stat.exists')
+             | map(attribute='item')
+             | list | sort }}
+
+    - name: "6.3.3 — network-config subset of the audit watch paths"
+      ansible.builtin.set_fact:
+        cis_audit_watch_present: "{{ cis_audit_paths_present | intersect(cis_audit_network_paths) | sort }}"
+
+    # 99- so it sorts after roles/hardening's 90- file; the distro-shipped
+    # audit.rules sorts later still, which is why its "-D" is neutralised below.
+    - name: "6.3.3 — CIS audit rule set"
+      ansible.builtin.template:
+        src: audit-cis.rules.j2
+        dest: /etc/audit/rules.d/99-guac-cis.rules
+        owner: root
+        group: root
+        mode: "0600"
+      notify: Restart auditd (cis)
+
+    - name: "6.3.3 — neutralise the distro default '-D' that would wipe the rule set"
+      ansible.builtin.replace:
+        path: /etc/audit/rules.d/audit.rules
+        regexp: '^-D\s*$'
+        replace: '# -D  # disabled by Ansible (ansible-guacamole): would delete the CIS rules'
+      failed_when: false
+      notify: Restart auditd (cis)
+
+    - name: "6.3.4 — audit log and tool permissions"
+      ansible.builtin.file:
+        path: "{{ item.p }}"
+        owner: root
+        group: root
+        mode: "{{ item.m }}"
+      loop:
+        - { p: /var/log/audit, m: "0700" }
+        - { p: /etc/audit/auditd.conf, m: "0640" }
+        - { p: /usr/sbin/auditctl, m: "0755" }
+        - { p: /usr/sbin/auditd, m: "0755" }
+        - { p: /usr/sbin/augenrules, m: "0755" }
+      loop_control:
+        label: "{{ item.p }}"
+      failed_when: false
+
+    - name: "6.3.1 — auditd enabled"
+      ansible.builtin.service:
+        name: auditd
+        enabled: true
+      when: not cis_in_container | bool
+      failed_when: false
+
+    # 6.3.1.x — auditing must cover processes that start before auditd does.
+    - name: "6.3.1 — audit=1 on the kernel command line"
+      ansible.builtin.replace:
+        path: /etc/default/grub
+        regexp: '^(GRUB_CMDLINE_LINUX=")(?!.*\baudit=1\b)(.*)"$'
+        replace: '\1audit=1 audit_backlog_limit={{ guac_cis_auditd_backlog_limit }} \2"'
+      when:
+        - not cis_in_container | bool
+        - not ('6.3.1' is search(cis_skip_re))
+      failed_when: false
+      notify: Regenerate grub config

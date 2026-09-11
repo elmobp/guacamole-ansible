@@ -190,6 +190,40 @@ re-run. See **SCENARIOS.md** for full copy-paste examples.
 | `guac_hardening_install_auditd` | `true` | Install and enable `auditd` with a baseline ruleset. |
 | `guac_fips_enabled` | `false` | Turn on FIPS crypto. **Opt-in** — needs a reboot; on RHEL runs `fips-mode-setup --enable`; on Ubuntu needs Ubuntu Pro; Debian unsupported. Can lock you out if the platform isn't prepared. |
 
+### CIS Benchmark (full coverage)
+
+`guac_hardening_*` above is a small opinionated baseline every host gets. `guac_cis_*` layers the
+rest of the CIS Benchmark on top, as its own role step in `site.yml` (`--tags cis`). The two are
+toggled independently. **Read [docs/CIS.md](CIS.md) before changing anything here** — the
+exclusion list in particular exists to keep Guacamole serving traffic.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| **`guac_cis_enabled`** | `true` | Apply the full CIS Benchmark control set (`roles/cis`). |
+| **`guac_cis_level`** | `l2` | `l1` or `l2` (CIS **Server** profile). `l2` adds: `usb-storage`/bluetooth/firewire/thunderbolt blacklist, `DisableForwarding` in sshd, `pam_wheel` on `su`, wireless off. |
+| **`guac_cis_exclusions`** | 9 entries | CIS control IDs **not** remediated. Prefix matched — `1.1.2` also skips `1.1.2.1.3`, never `1.1.22`. Every default entry is justified in [docs/CIS.md § Exclusions](CIS.md#exclusions--deliberate-deviations); don't drop one without reading its row. |
+
+Opt-ins that CIS asks for but that need a decision or a value from you:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `guac_cis_grub_password_hash` | `""` | Bootloader password. Paste the output of `grub2-mkpasswd-pbkdf2` (RHEL) / `grub-mkpasswd-pbkdf2` (Debian), then drop `"1.4.1"` from the exclusion list. |
+| `guac_cis_selinux_setenforce_now` | `false` | Flip a **running** RHEL host to enforcing during the play. `SELINUX=enforcing` is written to the config either way, so the host comes up enforcing after the next reboot; this only controls whether the switch happens immediately. Can break the nginx→Tomcat proxy mid-play. |
+| `guac_cis_apparmor_enforce_profiles` | `false` | `aa-enforce` every shipped AppArmor profile (Debian family, L2). Not validated against nginx/MariaDB here — turn on deliberately, then re-run `test/check.sh`. |
+| `guac_cis_pam_faillock_debian` | `false` | Account lockout on Debian/Ubuntu. Edits the shared `pam-auth-update` stack, where a mistake locks out **every** account. RHEL gets faillock by default (via `authselect`, which is reversible). |
+| `guac_cis_auditd_immutable` | `false` | auditd `-e 2`. Rules can't be changed until the next reboot — which also stops Ansible converging them. Enable last, on a host you've finished configuring, and drop `"6.3.3.21"` from the exclusion list. |
+| `guac_cis_manage_mounts` | `false` | Remount `/dev/shm` `nodev,nosuid,noexec`. Partitioning itself (CIS 1.1.2) is a build-time decision this role won't attempt on a live host. |
+
+Everything else — password quality and ageing, faillock thresholds, `TMOUT`, umask, auditd
+retention and disk-full actions, journald limits, AIDE schedule and exclusions, the protected
+service/port guard rails — lives in `roles/cis/defaults/main.yml`, is documented inline there,
+and can be overridden from `group_vars/all.yml` like any other variable.
+
+**Compliance gate.** `.github/workflows/compliance.yml` builds a host per OS family, scans it
+with `oscap xccdf eval` against the SCAP Security Guide CIS profile, publishes the HTML report
+as a workflow artifact, and fails below `CIS_SCORE_THRESHOLD` (starts at 80 and ratchets up).
+See [docs/CIS.md § Raising the CI threshold](CIS.md#raising-the-ci-threshold).
+
 ## Backup / BCP-DR
 
 | Variable | Default | Meaning |

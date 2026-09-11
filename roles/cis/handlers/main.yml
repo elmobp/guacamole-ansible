@@ -1,0 +1,74 @@
+---
+# Handler names carry a "(cis)" suffix wherever roles/hardening already defines a
+# handler with the same job: include_role merges handlers into one play namespace
+# and a duplicate name silently shadows the other role's copy.
+
+- name: Reload sysctl
+  ansible.builtin.command: sysctl --system
+  when: not (guac_container_build | bool)
+  changed_when: false
+  failed_when: false
+
+- name: Regenerate grub config
+  ansible.builtin.command:
+    cmd: >-
+      {{ 'grub2-mkconfig -o /boot/grub2/grub.cfg'
+         if ansible_os_family == 'RedHat' else 'update-grub' }}
+  when: not (guac_container_build | bool)
+  changed_when: true
+  failed_when: false
+
+- name: Restart sshd (cis)
+  ansible.builtin.service:
+    name: "{{ cis_sshd_service }}"
+    state: restarted
+  when: not (guac_container_build | bool)
+  failed_when: false
+
+- name: Restart auditd (cis)
+  ansible.builtin.command: systemctl restart auditd
+  when: not (guac_container_build | bool)
+  changed_when: true
+  failed_when: false
+
+- name: Restart rsyslog (cis)
+  ansible.builtin.service:
+    name: rsyslog
+    state: restarted
+  when: not (guac_container_build | bool)
+  failed_when: false
+
+- name: Restart chrony (cis)
+  ansible.builtin.service:
+    name: "{{ cis_chrony_service }}"
+    state: restarted
+  when: not (guac_container_build | bool)
+  failed_when: false
+
+- name: Restart journald
+  ansible.builtin.service:
+    name: systemd-journald
+    state: restarted
+  when: not (guac_container_build | bool)
+  failed_when: false
+
+- name: Restart postfix
+  ansible.builtin.service:
+    name: postfix
+    state: restarted
+  when: not (guac_container_build | bool)
+  failed_when: false
+
+- name: Reload systemd (cis)
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: not (guac_container_build | bool)
+  failed_when: false
+
+- name: Update PAM profiles
+  ansible.builtin.command: pam-auth-update --package
+  when:
+    - ansible_os_family == "Debian"
+    - not (guac_container_build | bool)
+  changed_when: true
+  failed_when: false

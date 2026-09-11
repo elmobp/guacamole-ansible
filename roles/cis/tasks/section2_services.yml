@@ -1,0 +1,168 @@
+---
+# =============================================================================
+# CIS Section 2 — Services
+#   2.1 Server services that must not be installed / running
+#   2.2 Client packages that must not be installed
+#   2.3 Time synchronisation (chrony — configured by roles/hardening)
+#   2.4 Job schedulers (cron, at)
+#
+# Guard rail: guac_cis_protected_services / guac_cis_package_keep are subtracted
+# from every removal list, so the benchmark can never uninstall nginx, Tomcat,
+# guacd, MariaDB or sshd out from under a running Guacamole host. Control 2.1.22
+# ("a web server must not be installed") is excluded by default for the same
+# reason — this host IS the web server.
+# =============================================================================
+
+- name: "2.x — install the packages the benchmark requires"
+  ansible.builtin.package:
+    name: "{{ cis_required_packages }}"
+    state: present
+  register: _cis_req_pkgs
+  until: _cis_req_pkgs is succeeded
+  retries: 3
+  delay: 10
+
+# --- 2.1 server services ---------------------------------------------------
+- name: "2.1 — remove server services that are not part of this appliance"
+  ansible.builtin.package:
+    name: "{{ cis_server_packages_absent
+              | difference(guac_cis_protected_services)
+              | difference(guac_cis_package_keep) }}"
+    state: absent
+  when:
+    - guac_cis_remove_server_services | bool
+    - not ('2.1' is search(cis_skip_re))
+  register: _cis_srv_absent
+  failed_when:
+    - _cis_srv_absent is failed
+    - "'no package' not in (_cis_srv_absent.msg | default('') | lower)"
+
+- name: "2.1 — mask services that stay installed but must never run"
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: false
+    masked: true
+  loop: "{{ cis_services_masked }}"
+  when:
+    - not cis_in_container | bool
+    - not ('2.1' is search(cis_skip_re))
+  failed_when: false
+
+# 2.1.x — a mail transfer agent may stay installed but must only listen on the
+# loopback interface. Removing postfix outright drags in other packages on RHEL.
+- name: "2.1.x — MTA listens on loopback only"
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: '^inet_interfaces\s*='
+    line: 'inet_interfaces = loopback-only'
+    create: false
+  when: not ('2.1' is search(cis_skip_re))
+  failed_when: false
+  notify: Restart postfix
+
+# --- 2.2 client packages ---------------------------------------------------
+- name: "2.2 — remove insecure client packages"
+  ansible.builtin.package:
+    name: "{{ cis_client_packages_absent
+              | difference(guac_cis_protected_services)
+              | difference(guac_cis_package_keep) }}"
+    state: absent
+  when:
+    - guac_cis_remove_client_packages | bool
+    - not ('2.2' is search(cis_skip_re))
+  register: _cis_cli_absent
+  failed_when:
+    - _cis_cli_absent is failed
+    - "'no package' not in (_cis_cli_absent.msg | default('') | lower)"
+
+# --- 2.3 time synchronisation ---------------------------------------------
+# chrony install + config + enablement is owned by roles/hardening
+# (guac_hardening_time_sync). Here we only assert the CIS-specific requirement
+# that it is not running as root.
+- name: "2.3 — chrony does not run as root"
+  ansible.builtin.copy:
+    dest: /etc/sysconfig/chronyd
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible (ansible-guacamole)
+      OPTIONS="-F 2 -u chrony"
+  when:
+    - ansible_os_family == "RedHat"
+    - guac_hardening_time_sync | default(true) | bool
+    - not ('2.3' is search(cis_skip_re))
+  notify: Restart chrony (cis)
+
+- name: "2.3 — chrony does not run as root (Debian)"
+  ansible.builtin.lineinfile:
+    path: /etc/default/chrony
+    regexp: '^DAEMON_OPTS='
+    line: 'DAEMON_OPTS="-F 1 -u _chrony"'
+    create: false
+  when:
+    - ansible_os_family == "Debian"
+    - guac_hardening_time_sync | default(true) | bool
+    - not ('2.3' is search(cis_skip_re))
+  failed_when: false
+  notify: Restart chrony (cis)
+
+# --- 2.4 job schedulers ----------------------------------------------------
+- name: "2.4.1 — cron directories are root-only"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0700"
+    state: directory
+  loop:
+    - /etc/cron.d
+    - /etc/cron.hourly
+    - /etc/cron.daily
+    - /etc/cron.weekly
+    - /etc/cron.monthly
+  when: not ('2.4.1' is search(cis_skip_re))
+  failed_when: false
+
+- name: "2.4.1 — /etc/crontab is root-only"
+  ansible.builtin.file:
+    path: /etc/crontab
+    owner: root
+    group: root
+    mode: "0600"
+  when: not ('2.4.1' is search(cis_skip_re))
+  failed_when: false
+
+# CIS wants 0640-or-tighter; roles/hardening already lays these down at 0600,
+# so this task deliberately uses the same mode — two tasks fighting over the
+# same file is the classic way to lose the changed=0 idempotence gate.
+- name: "2.4.1/2.4.2 — cron and at restricted to an explicit allow list"
+  ansible.builtin.copy:
+    dest: "{{ item }}"
+    content: ""
+    owner: root
+    group: root
+    mode: "0600"
+    force: false
+  loop:
+    - /etc/cron.allow
+    - /etc/at.allow
+  when: not ('2.4.1' is search(cis_skip_re))
+
+# /etc/cron.deny is intentionally NOT removed: roles/common writes the guacd
+# account into it and would recreate it on the next converge. With an empty
+# cron.allow present, cron.deny has no effect anyway.
+- name: "2.4.2 — at.deny removed (allow list wins)"
+  ansible.builtin.file:
+    path: /etc/at.deny
+    state: absent
+  when: not ('2.4.2' is search(cis_skip_re))
+
+- name: "2.4.1 — cron daemon enabled"
+  ansible.builtin.service:
+    name: "{{ cis_cron_service }}"
+    enabled: true
+  when:
+    - not cis_in_container | bool
+    - not ('2.4.1' is search(cis_skip_re))
+  failed_when: false
