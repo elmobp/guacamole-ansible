@@ -61,11 +61,13 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
   1.5.5→1.6.0 verified live: login OK, idempotent. Clean end-to-end re-run in progress.
 - **`test/upgrade.sh ol9 1.5.5 1.6.0` PASSED** — guacd rebuild + war/jar refresh + schema
   upgrade + login + idempotent.
-- **SSO auth added** (`1e8529b`): OpenID Connect, SAML, X.509 client-cert, CAS — toggle-driven
-  identity layers over JDBC. Verified on ol9 (all 4 extensions load, nginx -t ok, idempotent).
+- **SSO auth added** (`1e8529b` / docs `033a2f9`): OpenID Connect, SAML, X.509 client-cert, CAS —
+  toggle-driven identity layers over JDBC. Verified on ol9 both ways:
+  all-on (4 extensions load, nginx -t ok, login 200, idempotent) AND all-off baseline
+  (changed=0, checks green, no SSO jars) — no regression.
   Interactive `scripts/configure.py` writes host_vars and asks the auth method.
 - Still TODO: `podman build` container image smoke, phase-11 source-ref smoke
-  (`-e guac_source_ref=1.6.0` on ol9), full 7-distro re-run after SSO change (ol9 baseline running).
+  (`-e guac_source_ref=1.6.0` on ol9), full non-ol9 matrix re-run after SSO change (low risk — guarded).
 
 ```
 cd ~/Documents/Projects/claude
