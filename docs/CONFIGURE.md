@@ -94,6 +94,47 @@ Each is **off by default**. Nothing is installed unless you set its toggle to `t
 `guac_duo` (a dictionary): `api_hostname`, `integration_key`, `secret_key`, `application_key`
 — from your Duo Admin Panel.
 
+## Single sign-on / federated authentication
+
+Pick **one** primary method. Each is an *identity* layer: the SSO provider proves who the user
+is, the MySQL database still holds connections and permissions. Groups delivered by the provider
+map onto `guac_user_groups` for RBAC. MFA (`guac_totp_enabled` / `guac_duo_enabled`) can stack
+on top of any of these. `scripts/configure.py` walks you through the choice interactively.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `guac_openid_enabled` | `false` | OpenID Connect (Keycloak, Entra ID, Okta, Google, …). Fill `guac_openid`. |
+| `guac_saml_enabled` | `false` | SAML 2.0 (ADFS, Entra ID, Okta, Shibboleth, …). Fill `guac_saml`. |
+| `guac_ssl_auth_enabled` | `false` | X.509 client-certificate / smart-card auth. Fill `guac_ssl_auth` (+ `guac_ssl_auth_*`). |
+| `guac_cas_enabled` | `false` | CAS (Apereo). Fill `guac_cas`. |
+
+The role **fails early** with a clear message if a method is enabled but its required keys are
+blank, so a misconfiguration never reaches a half-built Tomcat.
+
+`guac_openid` — **required:** `authorization_endpoint`, `jwks_endpoint`, `issuer`, `client_id`,
+`redirect_uri` (the full `https://<host>/` URL, registered identically at the IdP). Optional:
+`username_claim_type` (default `email`), `groups_claim_type` (default `groups`), `scope`,
+`attributes_claim_type`, `allowed_clock_skew`, `max_token_validity`, `max_nonce_validity`.
+
+`guac_saml` — **required:** `callback_url` (`https://<host>/`), plus **either** `idp_metadata_url`
+**or** both `idp_url` and `entity_id`. Optional: `group_attribute` (default `groups`), `strict`
+(default `true`; only set `false` for testing), `debug`, `compress_request`, `compress_response`,
+`x509_cert_path`, `private_key_path`.
+
+`guac_ssl_auth` — **required:** `auth_uri` (the cert-verifying vhost, `https://cert.<host>/`) and
+`primary_uri` (the normal vhost). Optional: `subject_username_attribute` (default `CN`),
+`subject_base_dn`, `client_certificate_header`/`client_verified_header` (defaults `X-Client-Certificate` /
+`X-Client-Verified`), `max_token_validity`, `max_domain_validity`. Plus:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `guac_ssl_auth_manage_nginx` | `true` | Have the nginx role add a cert-verifying vhost (`ssl_verify_client optional`) that forwards the verified cert, and scrub the `X-Client-*` headers on the normal vhost so a browser can't forge them. |
+| `guac_ssl_auth_domain` | `""` | `server_name` for that vhost, e.g. `cert.guac.example.com`. It also serves `*.<domain>` because the ssl extension redirects through ephemeral subdomains — in production give it a **wildcard** TLS cert and a wildcard DNS record. |
+| `guac_ssl_auth_client_ca` | `""` | PEM bundle of the CA(s) that issue your client certs (store in vault). |
+
+`guac_cas` — **required:** `authorization_endpoint` (`https://cas.example.com/cas`), `redirect_uri`.
+Optional: `clearpass_key`.
+
 ## Backend servers, groups and users (declarative)
 
 Define the machines your users will connect *to*. Managed by the `connections` role; safe to

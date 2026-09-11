@@ -109,6 +109,60 @@ in Guacamole (or via `guac_users` below with matching usernames).
 
 ---
 
+## 6a. OpenID Connect (Keycloak / Entra ID / Okta / Google)
+
+```yaml
+guac_openid_enabled: true
+guac_openid:
+  authorization_endpoint: "https://idp.example.com/realms/corp/protocol/openid-connect/auth"
+  jwks_endpoint:          "https://idp.example.com/realms/corp/protocol/openid-connect/certs"
+  issuer:                 "https://idp.example.com/realms/corp"
+  client_id:              "guacamole"
+  redirect_uri:           "https://guac.example.com/"
+  username_claim_type:    "preferred_username"
+  groups_claim_type:      "groups"
+```
+
+Register `https://guac.example.com/` as an allowed redirect URI at the IdP. Guacamole shows an
+SSO button on the login page; the database still holds connections and permissions. Groups from
+the `groups` claim line up with `guac_user_groups` for RBAC. Stack MFA by also setting
+`guac_totp_enabled: true`.
+
+## 6b. SAML 2.0 (ADFS / Entra ID / Shibboleth)
+
+```yaml
+guac_saml_enabled: true
+guac_saml:
+  idp_metadata_url: "https://idp.example.com/federationmetadata/2007-06/federationmetadata.xml"
+  entity_id:        "https://guac.example.com/"
+  callback_url:     "https://guac.example.com/"
+  group_attribute:  "groups"
+  strict: true
+```
+
+If your IdP has no metadata URL, drop `idp_metadata_url` and set `idp_url` instead (with
+`entity_id`). The IdP must POST assertions to `https://guac.example.com/` (the `callback_url`).
+
+## 6c. Smart card / X.509 client certificate
+
+```yaml
+guac_ssl_auth_enabled: true
+guac_ssl_auth_domain: "cert.guac.example.com"        # + a *.cert.guac.example.com DNS record
+guac_ssl_auth_client_ca: "{{ vault_client_issuing_ca_pem }}"
+guac_ssl_auth:
+  auth_uri:    "https://cert.guac.example.com/"
+  primary_uri: "https://guac.example.com/"
+  subject_username_attribute: "CN"
+```
+
+The nginx role adds a second TLS vhost for `cert.guac.example.com` (and `*.cert...`) that does
+`ssl_verify_client optional` and forwards the verified certificate; it also scrubs the
+`X-Client-*` headers on the normal vhost so a browser cannot forge an identity. In production
+give that vhost a **wildcard** certificate. Users click *"Certificate / Smart Card"* on the
+login page, the browser prompts for a cert, and the CN becomes the Guacamole username.
+
+---
+
 ## 7. Define your backend servers (RDP / SSH / VNC)
 
 ```yaml

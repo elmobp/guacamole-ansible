@@ -121,6 +121,21 @@ You should see `SUCCESS` and `"ping": "pong"`.
 
 ## 6. Set your passwords and site name
 
+### Option A — guided (recommended)
+
+Run the question-and-answer helper. It asks for the hostname, database location, **which
+sign-in method** you want (database password, LDAP/AD, OpenID Connect, SAML, or smart-card),
+whether to add MFA, and a few extras — then writes a `host_vars/<hostname>.yml` for you.
+It installs nothing and can be re-run any time.
+
+```bash
+python3 scripts/configure.py
+```
+
+Then add that hostname to `inventory/hosts.ini` under `[guacamole]` and skip to step 7.
+
+### Option B — by hand
+
 Open **`group_vars/all.yml`** and change at least these three values:
 
 ```yaml
@@ -130,7 +145,8 @@ guac_mysql_root_password: "<another long random password>"
 ```
 
 Everything else has a sensible default. The full meaning of every option is in
-**[CONFIGURE.md](CONFIGURE.md)**, and ready-to-paste examples for common setups (separate
+**[CONFIGURE.md](CONFIGURE.md)** — including the single sign-on methods (OpenID Connect, SAML,
+X.509 client certificate, CAS) — and ready-to-paste examples for common setups (separate
 database server, enabling TOTP/MFA, adding your RDP/SSH target servers, production Let's Encrypt,
 FIPS, ...) are in **[SCENARIOS.md](SCENARIOS.md)**.
 

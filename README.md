@@ -28,8 +28,11 @@ It builds a Guacamole jump-host:
 - Guacamole web client on **Apache Tomcat** (official binary tarball)
 - **MariaDB** JDBC auth backend — local or a **separate/remote DB server**
 - **Nginx** reverse proxy, **TLS 1.3 only**, self-signed by default (Let's Encrypt for production)
+- **Single sign-on**, one primary method per host: OpenID Connect, SAML 2.0,
+  X.509 client-certificate / smart card, or CAS — all toggle-driven, layered over the DB
 - Every optional extension behind an independent host-var toggle:
   TOTP, Duo, LDAP/AD, Quick Connect, History Recording Storage, dark-theme branding
+- **`scripts/configure.py`** — interactive Q&A that asks which auth method you want and writes the host_vars
 - **One-line upgrades** — bump `guac_version`, re-run
 - **BCP/DR** — `guac-backup` / `guac-restore`, scheduled, integrity-checked, optionally encrypted
 - **CIS-aligned hardening** (L1/L2), optional **FIPS**
@@ -49,7 +52,7 @@ roles/
   guacd/                 # build + install guacamole-server, guacd.conf, systemd unit
   guacamole_client/      # Tomcat, guacamole.war, JDBC extension, guacamole.properties, stale-artifact pruning
   nginx_proxy/           # reverse proxy, RemoteIpValve, TLS 1.3 self-signed, Let's Encrypt (opt)
-  guac_extensions/       # TOTP / Duo / LDAP / quickconnect / histrec / branding — toggle-driven
+  guac_extensions/       # TOTP / Duo / LDAP / OpenID / SAML / SSL-cert / CAS / quickconnect / histrec / branding — toggle-driven
   backup/                # guac-backup + guac-restore, systemd timer (BCP/DR)
   hardening/             # CIS-aligned OS + app hardening, guacd TLS, FIPS (opt-in)
 container/
