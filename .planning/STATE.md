@@ -1,9 +1,9 @@
 ---
 gsd_state_version: "1.0"
 status: in-progress
-stopped_at: milestone-1 matrix validation (ubuntu2604 idempotence)
-last_updated: "2026-09-11T06:00:00.000Z"
-state_head: 1b85215
+stopped_at: phase-15 (CIS L2) code complete on worktree branch — needs a real-host converge
+last_updated: "2026-09-11T12:00:00.000Z"
+state_head: 2d444a4
 ---
 
 # Project State
@@ -42,7 +42,7 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
 | 13 LDAP-group RBAC (`guac_user_groups` + ldap-group props) | ✅ code | 45a3953 |
 | 14 external log forwarding over TLS / RELP+TLS | ✅ code | a66489d |
 | — FreeRDP 3.15 build fix (Debian 13 / Ubuntu 24.04+) | ✅ validated | a5c006c |
-| 15 full CIS L2 coverage | ○ planned (vendor ansible-lockdown CIS + OpenSCAP gate) |
+| 15 full CIS L2 coverage | ✅ code (native `roles/cis` + OpenSCAP gate) — **not yet run on a host** |
 | 16 deep ISM alignment + LLD rewrite | ○ planned |
 | 17 operator manual → PDF | ○ planned |
 | 18/19/20 | ❌ descoped 2026-09-11 (Puppet/Nix/Chef/Terraform + AWS + Azure) | |
@@ -66,7 +66,21 @@ over an HTTPS TLS-1.3 reverse proxy; re-running (incl. `guac_version` bump) is i
   all-on (4 extensions load, nginx -t ok, login 200, idempotent) AND all-off baseline
   (changed=0, checks green, no SSO jars) — no regression.
   Interactive `scripts/configure.py` writes host_vars and asks the auth method.
-- Still TODO: `podman build` container image smoke, phase-11 source-ref smoke
+- **Phase 15 (CIS L2) — code complete, statically validated only.** New `roles/cis` (sections 1–7,
+  OS-family split), wired into `site.yml` as its own role step after `hardening`; new
+  `.github/workflows/compliance.yml` OpenSCAP gate; `docs/CIS.md`; CONFIGURE + ROADMAP updated.
+  Built on branch `worktree-agent-a2c4e587033da3c32`, **not merged to main**.
+  Plan deviation: implemented natively instead of vendoring ansible-lockdown — no upstream role
+  exists for Debian 13 / Ubuntu 26.04, and the upstream roles are not `changed=0`-clean.
+  **Not yet executed against a container** — no `ansible-playbook`, no `podman` run in that
+  session (another process owned the container host). Validated with yamllint, per-file YAML
+  parse, Jinja2 template compile + a render of the audit rule set, `bash -n` on every workflow
+  `run:` block, and a unit test of the score-gate parser against a synthetic XCCDF result.
+  **First real-host run must confirm: (a) `changed=0` on converge 2 with `guac_cis_enabled: true`,
+  (b) `test/check.sh` still green, (c) sshd still accepts a login before you drop the session.**
+- Still TODO: CIS converge + idempotence on the matrix (start with ol9, then debian12/ubuntu2404),
+  first OpenSCAP score per family and the resulting threshold baseline,
+  `podman build` container image smoke, phase-11 source-ref smoke
   (`-e guac_source_ref=1.6.0` on ol9), full non-ol9 matrix re-run after SSO change (low risk — guarded).
 
 ```
@@ -77,8 +91,16 @@ podman build -t guacamole-appliance:local -f container/Containerfile .
 
 ## Resume
 
-Say "resume". Next: close out ubuntu2604 idempotence, then dr/upgrade/image smoke,
-then Phase 15 (CIS L2) / 16 (ISM+LLD) / 17 (PDF manual).
+Say "resume". Next: validate Phase 15 on a real container (see below), then dr/upgrade/image
+smoke, then Phase 16 (ISM+LLD) / 17 (PDF manual).
+
+```
+# Phase 15 validation — on the container host, from the worktree branch
+git checkout worktree-agent-a2c4e587033da3c32
+KEEP=1 test/run.sh ol9          # converge x2 must end changed=0, then check.sh
+podman exec guac-test-ol9 bash -lc 'dnf -y install openscap-scanner scap-security-guide &&
+  oscap info --profiles /usr/share/xml/scap/ssg/content/ssg-ol9-ds.xml'
+```
 
 ## Notes
 
