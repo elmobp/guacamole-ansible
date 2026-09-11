@@ -15,7 +15,9 @@ a new ISM is published.
 | | |
 |---|---|
 | Source | `https://raw.githubusercontent.com/elmobp/ism-quiz/main/controls.json` |
+| Nature of source | **third-party community extract of the ISM — not an ACSC publication** |
 | Retrieved | **2026-09-11** |
+| Re-verified | 2026-09-11 — re-downloaded, byte-identical, SHA-256 unchanged |
 | Stored at | `docs/data/ism-controls.json` (byte-for-byte as retrieved) |
 | Provenance | `docs/data/ism-controls.meta.json` — URL, date, SHA-256, size, counts |
 | SHA-256 | `f88b1222148e363ddf7e1c0f53258c6ab6a18fdc5bc61bc4d29fbc818481572e` |
@@ -26,6 +28,34 @@ The file is a JSON object of `control id -> control statement`, with some HTML m
 the statements. JSON has no comment syntax, so the provenance header lives in the sidecar
 `.meta.json` rather than in the dataset — keeping the dataset byte-identical to the source means
 the SHA-256 above can be re-verified against the upstream URL at any time.
+
+### Why this dataset, and what it is not
+
+Be blunt about this, because an assessor will ask.
+
+- The dataset is a **community extract**, mirrored on GitHub. It is *not* the ACSC's own
+  machine-readable ISM release, and neither ACSC nor ASD published, endorsed or maintains it.
+- It carries **no ISM release label**. The control ids and statements are consistent with a recent
+  ISM, but the file does not state *which* quarterly release it was taken from, so this mapping
+  cannot claim to be "the September-2025 ISM" or any other specific edition.
+- It was chosen because it is the shape this generator needs (`{"ism-NNNN": "statement"}`), is
+  stable at a fixed URL, and can be hash-pinned so the mapping is reproducible. The official
+  downloads at cyber.gov.au (XLSX / OSCAL) are the better source and were not reachable
+  non-interactively from this environment.
+
+**Consequences you must accept before relying on §12:**
+
+1. Re-check every cited control id and statement against the currently published ISM before an
+   assessment. §5 is the procedure; step 4 (diff the *statements*, not just the ids) is the one
+   that matters.
+2. Treat the abridged statements in the §12 table as *navigation aids*, not as quotations of the
+   ISM. Each row links to the control id so the authoritative text can be looked up.
+3. The **status and the evidence note** in each row are the durable part of this work — they were
+   derived from this repository's code and are unaffected by which ISM edition you check them
+   against. Only the control numbering is at risk of drift.
+
+Swapping in the official release later is a data change only: replace `ism-controls.json`, update
+the sidecar, re-run the generator, and resolve whatever ids it reports as missing.
 
 **Normalisation.** 36 of the published values carry the *next* control appended after a stray
 markdown table separator, for example:

@@ -435,10 +435,16 @@ Status legend:
 
 **Status breakdown:** ✅ 44 · 🟡 99 · 📋 16 · ❌ 6.
 
-> Control statements are abridged from `docs/data/ism-controls.json` (retrieved 2026-09-11).
-> **Verify against the current published ISM** for authoritative text, control numbers, and
-> applicability to `[classification]`. This table is generated — edit
-> `docs/data/ism-mapping.yml` and run `python3 scripts/ism_map.py`; do not hand-edit the rows.
+> **Dataset caveat.** Control statements are abridged from `docs/data/ism-controls.json`
+> (retrieved **2026-09-11**), which is a **third-party community extract of the ISM, not an ACSC
+> publication, and carries no ISM release label**. Treat the statements below as navigation aids,
+> not as quotations. **The currently published ISM at cyber.gov.au is authoritative** — verify
+> every control number, its text and its applicability to `[classification]` against it before an
+> assessment. The *status and evidence note* in each row derive from this repository's code and
+> hold regardless of ISM edition; only the numbering is at risk of drift. See `docs/ISM.md` §1.
+>
+> This table is generated — edit `docs/data/ism-mapping.yml` and run
+> `python3 scripts/ism_map.py`; do not hand-edit the rows.
 
 <!-- BEGIN ISM TABLE -->
 
