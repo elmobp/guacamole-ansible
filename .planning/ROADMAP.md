@@ -103,7 +103,7 @@ extensions, and the two-distro test harness.
 
 ## Milestone 2 — requested 2026-09-10 (sized honestly, sequenced)
 
-**Descoped 2026-09-11:** Phases 18 (Puppet/Nix/Chef/Terraform CDK), 19 (AWS), 20 (Azure). Remaining M2 work: 15 (CIS L2), 16 (ISM+LLD), 17 (PDF manual).
+**Descoped 2026-09-11:** Phases 18 (Puppet/Nix/Chef/Terraform CDK), 19 (AWS), 20 (Azure). Remaining M2 work: 15 (CIS L2), 17 (PDF manual). **16 (ISM+LLD) is ✅ done 2026-09-11.**
 
 **Phases 10-14 implemented + validated on OL9 (2026-09-11): base PASS, M2 smoke failed=0, idempotent, BALANCING/RBAC/TLS-syslog asserted.**
 
@@ -151,7 +151,7 @@ Pick phases to run; they are mostly independent. Sizes: **S** ≈ hours, **M** �
   deviations. `guac_hardening_level: l2` becomes "real CIS L2 with documented exceptions".
 - **Success:** OpenSCAP CIS L2 score ≥ [target]; every non-pass has a written justification.
 
-### Phase 16: Deep ISM alignment + LLD refresh  **[L]**
+### Phase 16: Deep ISM alignment + LLD refresh  **[L]** — ✅ DONE 2026-09-11
 - Work the **current published ISM** systematically for every control family in scope
   (config/patching, IDAM, crypto/TLS, logging/audit, backup, network, web, DB, media, ops);
   for each: implement, mark partial with the gap, or mark customer-responsibility with why.
@@ -159,6 +159,29 @@ Pick phases to run; they are mostly independent. Sizes: **S** ≈ hours, **M** �
   quiz dataset), each row linked to the implementing role/task, with an assessor-ready evidence
   column and a POA&M.
 - **Success:** LLD covers every in-scope ISM control with an honest status + evidence pointer.
+
+**Delivered** (branch `worktree-agent-ac8beab45135de3fc`):
+
+- `docs/data/ism-controls.json` + `.meta.json` — hash-pinned control dataset (871 published ids →
+  **907 usable** after splitting 36 merged values), stored byte-for-byte with a provenance sidecar.
+- `docs/data/ism-mapping.yml` — **165 hand-authored rows** (control → theme / status / LLD anchor /
+  evidence note): ✅ 44 · 🟡 99 · 📋 16 · ❌ 6.
+- `scripts/ism_map.py` — stdlib-only generator (`--check` / `--stats`). §12 is generated between
+  markers, so the table cannot drift from the mapping file; it also fails if a ❌ row has no §12.2
+  action, or if §12.2 cites a control with no row.
+- `docs/LLD-RHEL-IRAP.md` §12 (mapping), §12.1 (25 out-of-scope families, each with the artefact
+  that owns it), §12.2 (**19-item POA&M seed**). SSO — OpenID Connect, SAML, X.509 client
+  certificate, CAS — is credited under §6.2 and the identity/crypto controls.
+- `docs/ISM.md` — methodology, status vocabulary, corrections log, refresh procedure, CI gate.
+
+**Deviation from the plan above, recorded deliberately:** the phase said "over the real ISM (not
+the quiz dataset)". The official cyber.gov.au XLSX/OSCAL downloads were not reachable
+non-interactively from this environment, so the mapping runs on a **third-party community extract
+that carries no ISM release label**. This is stated plainly in `docs/ISM.md` §1, in the §12
+disclaimer and in the dataset sidecar. Swapping in the official release is a data change only:
+replace the JSON, update the sidecar, re-run the generator, resolve the ids it reports as missing.
+The per-row *status and evidence* come from this repository's code and survive that swap — only
+the control numbering is at risk.
 
 ### Phase 17: Operator manual (PDF)  **[L]**
 - `docs/manual/` (Markdown) → PDF via pandoc in CI. Every moving piece: architecture,
