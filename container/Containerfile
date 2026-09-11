@@ -20,14 +20,14 @@ RUN set -eux; \
       apt-get install -y --no-install-recommends ansible || \
         { apt-get install -y --no-install-recommends ansible-core; ansible-galaxy collection install -r requirements.yml; }; \
     fi; \
-    ansible-playbook -i 'localhost,' -c local site.yml \
+    ansible-playbook -i inventory/hosts.ini -c local site.yml \
       -e guac_container_build=true \
       -e guac_install_mariadb=false \
       -e guac_install_nginx=false \
       -e guac_db_bootstrap=false \
       -e guac_manage_firewall=false \
       -e guac_manage_selinux=false \
-      -e guac_hardening_enabled=true \
+      -e guac_hardening_enabled=false \
       -e guac_backup_enabled=false ; \
     # Stage the DB schema for first-run bootstrap by the entrypoint
     mkdir -p /opt/guac-schema; \

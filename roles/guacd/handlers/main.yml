@@ -2,6 +2,7 @@
 - name: Reload systemd guacd
   ansible.builtin.systemd:
     daemon_reload: true
+  when: not (guac_container_build | default(false) | bool)
 
 - name: Restart guacd
   ansible.builtin.service:

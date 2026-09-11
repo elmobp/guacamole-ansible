@@ -2,3 +2,4 @@
 - name: Reload systemd (backup)
   ansible.builtin.systemd:
     daemon_reload: true
+  when: not (guac_container_build | default(false) | bool)
