@@ -1,10 +1,23 @@
 ---
 gsd_state_version: "1.0"
-status: in-progress
-stopped_at: Phases 15/16/17 merged; converge-testing CIS L2 + custom-login together
-last_updated: "2026-09-11T10:40:00.000Z"
-state_head: 27b4d43
+status: milestone-2-complete
+stopped_at: all planned phases merged and converge-tested; pushed to origin
+last_updated: "2026-09-11T11:10:00.000Z"
+state_head: 6de5ff9
 ---
+
+## Session close 2026-09-11
+
+All of Milestone 2 (phases 10-17) plus the modern-login-page feature are merged to `main` and
+converge-tested together on ol9 (custom-login + CIS L2 + OpenID all enabled at once):
+`changed=0` on two consecutive runs, `check.sh` all green, all extensions load. Pushed to
+`git@github.com:elmobp/guacamole-ansible.git` (`main` branch; the three agent worktree branches
+were internal scratch space, deleted after merging, not pushed). Repo working tree clean, no
+containers left running.
+
+Still open, not started this session: independently confirming the CIS agent's two flagged risks
+(inbound SSH forwarding behavior under L2, Debian SSG content-gap) on a real (non-container) host,
+and running the CIS OpenSCAP CI gate for real on GitHub Actions for the first time.
 
 # Project State
 
