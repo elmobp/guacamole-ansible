@@ -146,7 +146,22 @@ guac_ldap_enabled: false
 guac_quickconnect_enabled: false
 guac_histrec_enabled: false
 guac_histrec_path: "/var/lib/guacamole/recordings"
-guac_branding_enabled: false                     # dark-theme branding.jar
+guac_branding_enabled: false                     # dark-theme branding.jar (built-in, static)
+
+# Modern login page — github.com/L4rm4nd/Guacamole-Custom-Login. A branding extension built
+# from source at install time (pure zip via the upstream repo's build.py; no compiler needed):
+# a dark centered-card login with local + OIDC/SSO buttons and an auto "or" divider between them.
+# Mutually exclusive with guac_branding_enabled (both restyle the login page).
+guac_custom_login_enabled: false
+guac_custom_login_source_repo: "https://github.com/L4rm4nd/Guacamole-Custom-Login"
+guac_custom_login_source_ref: "master"           # pin a commit SHA for a reproducible build
+guac_custom_login:
+  show_local_auth: true                          # show the username/password form
+  show_oidc_auth: true                            # show the SSO button (needs guac_openid_enabled)
+  oidc_button_text: "Sign in with SSO"            # "" => the openid extension's default label
+  app_title: "Guacamole - Remote Access"          # shown under the logo + in the browser tab
+  app_subtitle: ""                                # "" => hidden
+  logo_path: ""                                   # "" => upstream's default logo; else a local PNG path
 
 # ---------------------------------------------------------------------------
 # Single sign-on / federated auth (guacamole-auth-sso archive).

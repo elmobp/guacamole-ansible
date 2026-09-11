@@ -75,7 +75,8 @@ Each is **off by default**. Nothing is installed unless you set its toggle to `t
 | `guac_quickconnect_enabled` | `false` | "Quick Connect" ad-hoc connection bar in the UI. |
 | `guac_histrec_enabled` | `false` | History Recording Storage (session recordings browsable in the UI). |
 | `guac_histrec_path` | `/var/lib/guacamole/recordings` | Where recordings are written. |
-| `guac_branding_enabled` | `false` | Install the dark-theme branding jar. |
+| `guac_branding_enabled` | `false` | Install the built-in dark-theme branding jar. |
+| `guac_custom_login_enabled` | `false` | Install the ["Guacamole-Custom-Login"](https://github.com/L4rm4nd/Guacamole-Custom-Login) modern login page (built from source — see below). Mutually exclusive with `guac_branding_enabled`. |
 
 `guac_ldap` (a dictionary — set the keys you need):
 
@@ -93,6 +94,34 @@ Each is **off by default**. Nothing is installed unless you set its toggle to `t
 
 `guac_duo` (a dictionary): `api_hostname`, `integration_key`, `secret_key`, `application_key`
 — from your Duo Admin Panel.
+
+### Modern login page (`guac_custom_login_enabled`)
+
+Builds [L4rm4nd/Guacamole-Custom-Login](https://github.com/L4rm4nd/Guacamole-Custom-Login) from
+source at install time: `git clone` the repo, template its `login-config.js`, run the upstream
+`python3 build.py` (pure zip packaging — no Java/Maven needed), install the resulting
+`branding.jar`. Gives a dark centered-card login with the username/password form and/or an
+SSO button, with an automatic "or" divider when both are shown. Rebuilds only when the pinned
+ref, your config, or the logo actually changes — idempotent otherwise.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `guac_custom_login_source_repo` | the upstream repo | Override for a fork/mirror. |
+| `guac_custom_login_source_ref` | `master` | Branch, tag, or commit SHA. **Pin a SHA** for a reproducible build — `master` can change under you. |
+
+`guac_custom_login` (a dictionary):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `show_local_auth` | `true` | Show the username/password form. |
+| `show_oidc_auth` | `true` | Show the SSO button. Requires `guac_openid_enabled: true` (or another `guacamole-auth-sso` provider) — the button simply doesn't render if no SSO extension is installed. |
+| `oidc_button_text` | `"Sign in with SSO"` | `""` uses the SSO extension's own default label. |
+| `app_title` | `"Guacamole - Remote Access"` | Shown under the logo and in the browser tab. |
+| `app_subtitle` | `""` | `""` hides the subtitle line. |
+| `logo_path` | `""` | Local path (on the control machine) to a PNG to use instead of the upstream default logo. |
+
+Enabling this while `guac_branding_enabled: true` is also set fails the run — both restyle the
+login page.
 
 ## Single sign-on / federated authentication
 

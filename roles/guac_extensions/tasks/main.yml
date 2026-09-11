@@ -47,6 +47,15 @@
     fail_msg: "guac_cas_enabled=true needs guac_cas.authorization_endpoint and .redirect_uri."
   when: guac_cas_enabled | bool
 
+- name: Validate custom-login configuration
+  ansible.builtin.assert:
+    that:
+      - not (guac_branding_enabled | bool)
+    fail_msg: >-
+      guac_custom_login_enabled and guac_branding_enabled both restyle the login page —
+      enable only one.
+  when: guac_custom_login_enabled | bool
+
 - name: Download extension archives
   ansible.builtin.get_url:
     url: "{{ guac_apache_dl_base }}/binary/{{ item.name }}-{{ guac_version }}.tar.gz"
@@ -127,6 +136,7 @@
     _keep_jars: >-
       {{ ['guacamole-auth-jdbc-mysql-' ~ guac_version ~ '.jar']
          + (['branding.jar'] if guac_branding_enabled | bool else [])
+         + (['guacamole-custom-login.jar'] if guac_custom_login_enabled | bool else [])
          + (_guac_enabled_extensions | map(attribute='name')
             | map('regex_replace', '$', '-' ~ guac_version ~ '.jar') | list)
          + (_guac_sso_enabled | map(attribute='sub')
@@ -159,6 +169,131 @@
     path: "{{ guac_extensions_dir }}/branding.jar"
     state: absent
   when: not (guac_branding_enabled | bool)
+  notify: Restart tomcat
+
+# --- Modern login page (github.com/L4rm4nd/Guacamole-Custom-Login) -----
+- name: Install git (custom-login build)
+  ansible.builtin.package:
+    name: git
+    state: present
+  when: guac_custom_login_enabled | bool
+
+- name: Checkout guacamole-custom-login source
+  ansible.builtin.git:
+    repo: "{{ guac_custom_login_source_repo }}"
+    dest: "{{ guac_build_dir }}/guacamole-custom-login-src"
+    version: "{{ guac_custom_login_source_ref }}"
+    depth: 1
+    force: true
+  register: _cl_checkout
+  # The git module reports changed=true on every shallow re-fetch of a branch ref, even when
+  # the commit didn't move (a fresh shallow pack is fetched regardless). Gate on the actual
+  # before/after commit SHAs instead so a no-op run doesn't force a rebuild every time.
+  changed_when: (_cl_checkout.before | default('')) != (_cl_checkout.after | default(''))
+  when: guac_custom_login_enabled | bool
+
+# Built in a SEPARATE directory from the git checkout: templating our config directly into the
+# checkout raced the git module's own working-tree reset (it re-applies the shallow fetch each
+# run regardless of the before/after gate above), which wiped our edits and forced a rebuild
+# every run. Ansible owns "guacamole-custom-login" outright; git only ever touches "-src".
+# Only build.py + src/ are copied (not .git/) — .git/FETCH_HEAD and the reflogs pick up a fresh
+# timestamp on every fetch even when the commit doesn't move, which made a whole-tree copy look
+# "changed" on every run.
+- name: Ensure custom-login build directory exists
+  ansible.builtin.file:
+    path: "{{ guac_build_dir }}/guacamole-custom-login"
+    state: directory
+    mode: "0755"
+  when: guac_custom_login_enabled | bool
+
+- name: Sync custom-login build script into the build directory
+  ansible.builtin.copy:
+    src: "{{ guac_build_dir }}/guacamole-custom-login-src/build.py"
+    dest: "{{ guac_build_dir }}/guacamole-custom-login/build.py"
+    remote_src: true
+    mode: "0755"
+  register: _cl_sync_script
+  when: guac_custom_login_enabled | bool
+
+- name: Ensure custom-login build subdirectories exist
+  ansible.builtin.file:
+    path: "{{ guac_build_dir }}/guacamole-custom-login/src/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop: [css, images, js, translations]
+  when: guac_custom_login_enabled | bool
+
+# Synced file-by-file, NOT as a whole-tree copy: login-config.js (and optionally logo.png) are
+# managed by us below, and a tree copy from the pristine checkout would overwrite them with
+# upstream's placeholders on every run, which the next task would then overwrite right back —
+# a permanent (if harmless) "changed" every run. This list is upstream's fixed layout; update it
+# if github.com/L4rm4nd/Guacamole-Custom-Login adds files under src/.
+- name: Sync custom-login static assets into the build directory
+  ansible.builtin.copy:
+    src: "{{ guac_build_dir }}/guacamole-custom-login-src/src/{{ item }}"
+    dest: "{{ guac_build_dir }}/guacamole-custom-login/src/{{ item }}"
+    remote_src: true
+  loop:
+    - guac-manifest.json
+    - css/modern-login.css
+    - js/modern-login.js
+    - translations/en.json
+  register: _cl_sync
+  when: guac_custom_login_enabled | bool
+
+- name: Template custom-login configuration
+  ansible.builtin.template:
+    src: custom-login-config.js.j2
+    dest: "{{ guac_build_dir }}/guacamole-custom-login/src/js/login-config.js"
+    mode: "0644"
+  register: _cl_config
+  when: guac_custom_login_enabled | bool
+
+- name: Sync custom-login default logo (no override given)
+  ansible.builtin.copy:
+    src: "{{ guac_build_dir }}/guacamole-custom-login-src/src/images/logo.png"
+    dest: "{{ guac_build_dir }}/guacamole-custom-login/src/images/logo.png"
+    remote_src: true
+  register: _cl_sync_logo
+  when:
+    - guac_custom_login_enabled | bool
+    - guac_custom_login.logo_path | default('') | length == 0
+
+- name: Install custom-login logo (override)
+  ansible.builtin.copy:
+    src: "{{ guac_custom_login.logo_path }}"
+    dest: "{{ guac_build_dir }}/guacamole-custom-login/src/images/logo.png"
+    mode: "0644"
+  register: _cl_logo
+  when:
+    - guac_custom_login_enabled | bool
+    - guac_custom_login.logo_path | default('') | length > 0
+
+- name: Build custom-login branding.jar
+  ansible.builtin.command:
+    cmd: python3 build.py
+    chdir: "{{ guac_build_dir }}/guacamole-custom-login"
+  when:
+    - guac_custom_login_enabled | bool
+    - (_cl_checkout.changed | default(false)) or (_cl_sync_script.changed | default(false)) or (_cl_sync.changed | default(false)) or (_cl_config.changed | default(false)) or (_cl_sync_logo.changed | default(false)) or (_cl_logo.changed | default(false))
+  changed_when: true
+
+- name: Install custom-login branding jar
+  ansible.builtin.copy:
+    src: "{{ guac_build_dir }}/guacamole-custom-login/branding.jar"
+    dest: "{{ guac_extensions_dir }}/guacamole-custom-login.jar"
+    remote_src: true
+    owner: root
+    group: "{{ guac_tomcat_group }}"
+    mode: "0664"
+  when: guac_custom_login_enabled | bool
+  notify: Restart tomcat
+
+- name: Remove custom-login branding jar when disabled
+  ansible.builtin.file:
+    path: "{{ guac_extensions_dir }}/guacamole-custom-login.jar"
+    state: absent
+  when: not (guac_custom_login_enabled | bool)
   notify: Restart tomcat
 
 - name: Finalize extensions

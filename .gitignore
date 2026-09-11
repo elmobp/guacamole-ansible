@@ -9,3 +9,6 @@ docs/manual/*.pdf
 
 # Agent worktrees (managed by Claude Code)
 .claude/worktrees/
+
+# macOS
+.DS_Store

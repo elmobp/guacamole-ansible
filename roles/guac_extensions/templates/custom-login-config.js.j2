@@ -1,0 +1,9 @@
+// Managed by Ansible (ansible-guacamole) — edits will be overwritten.
+// Source: github.com/L4rm4nd/Guacamole-Custom-Login (branding extension)
+window.guacBrandingConfig = {
+    showLocalAuth: {{ guac_custom_login.show_local_auth | default(true) | bool | lower }},
+    showOidcAuth:  {{ guac_custom_login.show_oidc_auth | default(true) | bool | lower }},
+    oidcButtonText: {{ ((guac_custom_login.oidc_button_text | default('')) | trim | length > 0) | ternary((guac_custom_login.oidc_button_text | default('')) | to_json, 'null') }},
+    appTitle:    {{ (guac_custom_login.app_title | default('Guacamole')) | to_json }},
+    appSubtitle: {{ ((guac_custom_login.app_subtitle | default('')) | trim | length > 0) | ternary((guac_custom_login.app_subtitle | default('')) | to_json, 'null') }},
+};

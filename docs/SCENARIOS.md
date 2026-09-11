@@ -163,6 +163,32 @@ login page, the browser prompts for a cert, and the CN becomes the Guacamole use
 
 ---
 
+## 6d. Modern login page (local + SSO button, side by side)
+
+```yaml
+guac_custom_login_enabled: true
+guac_custom_login_source_ref: "a1b2c3d4"    # pin a commit SHA in production
+guac_openid_enabled: true                    # (or saml/ssl/cas — any guacamole-auth-sso provider)
+guac_openid:
+  authorization_endpoint: "https://idp.example.com/realms/corp/protocol/openid-connect/auth"
+  jwks_endpoint:          "https://idp.example.com/realms/corp/protocol/openid-connect/certs"
+  issuer:                 "https://idp.example.com/realms/corp"
+  client_id:              "guacamole"
+  redirect_uri:           "https://guac.example.com/"
+guac_custom_login:
+  show_local_auth: true
+  show_oidc_auth: true
+  oidc_button_text: "Sign in with Corp SSO"
+  app_title: "Acme Jump Host"
+  app_subtitle: "Authorized use only"
+```
+
+Renders a dark centered-card login with the password form and the SSO button together, split
+by an "or" divider. Set `show_local_auth: false` for an SSO-only login. Cannot be combined with
+`guac_branding_enabled` — pick one.
+
+---
+
 ## 7. Define your backend servers (RDP / SSH / VNC)
 
 ```yaml
