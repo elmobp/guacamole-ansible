@@ -138,7 +138,11 @@ The script validates before it writes and refuses to generate if:
 - a mapped control id does not exist in the dataset (a typo, or a control retired by a new ISM);
 - a row is missing `theme`, `status`, `ref` or `note`;
 - a status, theme or design reference is unknown;
-- the LLD is missing its `<!-- BEGIN/END ISM TABLE -->` markers.
+- the LLD is missing its `<!-- BEGIN/END ISM TABLE -->` markers;
+- a ❌ `not-addressed` row has **no corresponding action in §12.2**, or §12.2 cites a control that
+  has no row in the table. §12.2 is hand-written prose *outside* the generated markers, so this is
+  the guard that stops the POA&M seed drifting away from the mapping — an honest gap that never
+  reaches the POA&M is the failure mode this whole document exists to prevent.
 
 ### Adding or changing a row
 

@@ -757,6 +757,7 @@ system owner to complete.
 | 16 | Remove the guacd build toolchain and source tree post-build, or record the acceptance | ism-1245 | `[SysAdmin]` | `[date]` |
 | 17 | Scope target-side encryption: avoid VNC/telnet connections, or tunnel them | ism-0469, ism-1781 | `[Design authority]` | `[date]` |
 | 18 | Apply outbound egress filtering upstream (the host firewall restricts inbound only) | ism-1416, ism-1182, ism-1388 | `[Network]` | `[date]` |
+| 19 | Decide the just-in-time administration model — a PAM platform in front of the broker, or scripted time-bound grant/revoke against the Guacamole API — or formally accept standing access | ism-1649 | `[IDAM]` | `[date]` |
 
 ---
 

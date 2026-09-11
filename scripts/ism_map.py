@@ -165,6 +165,31 @@ def validate(mapping: dict, controls: dict) -> list:
     return problems
 
 
+POAM_HEADING = "### 12.2 Residual actions"
+
+
+def poam_gaps(mapping: dict, document: str) -> list:
+    """Every ❌ row must be driven by an action in the §12.2 POA&M seed.
+
+    §12.2 is hand-written prose outside the generated markers, so it can drift
+    away from the mapping file. This is the guard against that.
+    """
+    _, _, poam = document.partition(POAM_HEADING)
+    if not poam:
+        return ["%s is missing the '%s' section" % (LLD, POAM_HEADING)]
+    poam = poam.partition("\n## ")[0]
+    cited = set(re.findall(r"ism-[0-9a-z\-]+", poam))
+    problems = []
+    for cid, row in sorted(mapping["controls"].items()):
+        if row["status"] == "not-addressed" and cid not in cited:
+            problems.append("%s is '%s' but has no action in §12.2 (POA&M seed)" % (
+                cid, row["status"]))
+    for cid in sorted(cited):
+        if cid not in mapping["controls"]:
+            problems.append("§12.2 cites %s, which has no row in the mapping table" % cid)
+    return problems
+
+
 def sort_key(cid: str):
     match = re.match(r"ism-(\d+)$", cid)
     if match:
@@ -247,6 +272,12 @@ def main() -> int:
 
     if BEGIN not in document or END not in document:
         sys.stderr.write("ERROR: %s is missing the ISM table markers\n" % LLD)
+        return 2
+
+    gaps = poam_gaps(mapping, document)
+    if gaps:
+        for gap in gaps:
+            sys.stderr.write("ERROR: %s\n" % gap)
         return 2
 
     head, _, rest = document.partition(BEGIN)
