@@ -41,6 +41,33 @@ from the laptop — not `podman exec`) to close the CIS agent's flagged risk. Ap
   only — the file that actually matters (`/etc/sudoers.d/60-guac-cis`) is correctly `0440` in every
   run. Worth a look if it ever recurs on a real (non-fresh) host, but not blocking.
 
+## CI cleanup — backlogged 2026-09-14
+
+Real GitHub Actions CI failures found via `gh run view`/`gh run list` (not container-local
+failures). Three genuine bugs were already fixed and pushed in `39dd374`: yamllint comma-spacing
+in `roles/guac_extensions/defaults/main.yml`, an invalid double-colon image tag in the `image`
+job of `.github/workflows/ci.yml` (fixed via a "Compute a valid image tag" step), and a firewalld
+D-Bus readiness race in `roles/common/tasks/redhat.yml` (added a `firewall-cmd --state` poll
+gating the 3 downstream firewalld tasks). **Still open, deliberately deferred — not urgent**:
+
+- `Lint & syntax` job was still failing in the run triggered by `39dd374` (run `34559622910`);
+  the specific remaining yamllint/ansible-lint violation was not pinned down (log greps for
+  `##[error]` only surfaced the generic "Process completed with exit code 2" line).
+- `build` job still failing for `ubuntu2204`, `debian13`, `ubuntu2404`, `ubuntu2604`, `ol10` in
+  that same run (`ol9`, `debian12` passed). Not yet confirmed whether these are new or stale
+  (predate the fix commit).
+- All `image (*)` jobs were still failing in that same run — unclear if the tag fix (also in
+  `39dd374`) actually took effect for this run or needs re-checking against a fresh run.
+- `hardening : Apply sysctl hardening` idempotence issue on `ubuntu2204` specifically in CI
+  (`kernel.kptr_restrict`, `fs.suid_dumpable` show changed on 2nd run) — not reproduced on the
+  laptop; hypothesis is `/proc/sys` writes not persisting reliably under GitHub's nested-container
+  runners. Unconfirmed, unfixed.
+- `CIS compliance (OpenSCAP)` workflow run (`34559622880`) also failed — never investigated.
+
+Next session: re-run CI fresh (a lot may already be fixed by `39dd374`/stale by now), pull the
+Lint job's full log (not just grep for `##[error]`) to find the actual remaining rule violation,
+then work down the list above.
+
 ## First real OpenSCAP run 2026-09-11 — github.com/elmobp/guacamole-ansible/issues/1
 
 Manually ran the compliance.yml logic against a fresh `test/run.sh ol9` build (idempotent,

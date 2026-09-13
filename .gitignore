@@ -12,3 +12,4 @@ docs/manual/*.pdf
 
 # macOS
 .DS_Store
+*.swp
