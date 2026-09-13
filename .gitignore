@@ -13,3 +13,11 @@ docs/manual/*.pdf
 # macOS
 .DS_Store
 *.swp
+
+# secrets / local connection details -- never commit
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+!.env.dist
