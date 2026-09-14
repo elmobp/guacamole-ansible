@@ -78,6 +78,37 @@ ansible-galaxy collection install -r requirements.yml
 ansible-playbook -i inventory/hosts.ini site.yml
 ```
 
+### Prerequisites
+
+**RHEL: pin the subscription-manager release before running the playbook.** A
+freshly registered RHEL host can end up with the `-eus-` (Extended Update
+Support) repos enabled pinned to an older point release than the packages
+already on the box (seen in practice: `openssl-fips-provider` from a newer
+stream conflicting with `openssl-devel`/`openssl-libs` only available at the
+EUS pin). `dnf` then fails to resolve `guacd`'s build dependencies with a
+depsolve error. Fix once, before the first run:
+
+```bash
+subscription-manager release --set=9.8   # match the host's actual minor version
+dnf clean all
+```
+
+**Outbound network access.** The playbook downloads OS packages and Guacamole
+source tarballs directly on the target host — if it's behind a restrictive
+egress firewall/proxy, allow at least:
+
+| Purpose | Endpoint(s) |
+|---|---|
+| RHEL/Oracle Linux package repos (subscription-manager managed) | `cdn.redhat.com`, `subscription.rhsm.redhat.com`, `cert-api.access.redhat.com` (RHEL); Oracle Linux's own `yum.oracle.com` mirrors |
+| EPEL | `dl.fedoraproject.org` |
+| RPM Fusion (optional, `guac_enable_rpmfusion`) | `mirrors.rpmfusion.org` |
+| Debian package repos | `deb.debian.org`, `security.debian.org` |
+| Ubuntu package repos | `archive.ubuntu.com`, `security.ubuntu.com` (amd64) or `ports.ubuntu.com` (arm64) |
+| Apache Guacamole + Tomcat source tarballs | `dlcdn.apache.org`, `archive.apache.org` |
+| MySQL Connector/J | `repo1.maven.org` |
+| Extensions fetched from source (custom-login, etc.) | `github.com` |
+| Let's Encrypt (`guac_tls_mode: letsencrypt` only) | `acme-v02.api.letsencrypt.org` |
+
 Browse to `https://<guac_proxy_site>/` and log in as `guacadmin` / `guacadmin` (change it immediately).
 
 ### Key variables (`group_vars/all.yml`)

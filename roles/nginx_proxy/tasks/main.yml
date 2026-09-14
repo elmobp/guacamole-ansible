@@ -91,6 +91,17 @@
   no_log: true
   notify: Reload nginx
 
+# --- IPv6 detection (some hosts/images have the stack disabled entirely,
+# which makes nginx's socket() call for a "listen [::]" line fail outright) --
+- name: Check whether the kernel IPv6 stack is enabled
+  ansible.builtin.stat:
+    path: /proc/net/if_inet6
+  register: _ipv6_stat
+
+- name: Set IPv6 availability fact
+  ansible.builtin.set_fact:
+    guac_ipv6_available: "{{ _ipv6_stat.stat.exists }}"
+
 # --- Site + main config (site first so nginx -t on nginx.conf sees it) ------
 - name: Deploy Guacamole reverse-proxy site
   ansible.builtin.template:

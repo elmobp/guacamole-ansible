@@ -17,7 +17,18 @@ AllowAgentForwarding no
 IgnoreRhosts yes
 HostbasedAuthentication no
 MaxSessions 4
+{% if guac_fips_active | default(false) %}
+# FIPS mode is active on this host: curve25519 (X25519) and chacha20-poly1305
+# are not FIPS-140-approved. RHEL's OpenSSH is patched to defer to the system
+# crypto policy for these primitives, so offering them here doesn't just get
+# skipped in negotiation — the key exchange silently dies mid-handshake right
+# after the (unusable) algorithm is selected, closing every new connection.
+Ciphers aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes128-ctr
+KexAlgorithms ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,diffie-hellman-group14-sha256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512
+MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256
+{% else %}
 Ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com,aes128-gcm@openssh.com
 KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512
 MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
+{% endif %}
 Banner /etc/issue.net

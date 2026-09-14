@@ -1,0 +1,14 @@
+# Ansible control-node image: no install logic lives here. Used only to run
+# ansible-playbook (over SSH) against a real, external target host — the
+# playbook itself does all the work via roles/. See scripts/deploy-rhel-vm.sh.
+FROM oraclelinux:9
+
+RUN dnf -y install "oracle-epel-release-el9" \
+ && dnf -y install ansible-core openssh-clients sshpass python3-pip \
+ && dnf clean all
+
+WORKDIR /workspace
+COPY requirements.yml /workspace/requirements.yml
+RUN ansible-galaxy collection install -r requirements.yml
+
+ENTRYPOINT ["/workspace/deploy/entrypoint.sh"]

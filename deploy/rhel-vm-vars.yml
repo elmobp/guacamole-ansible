@@ -1,0 +1,25 @@
+---
+# First-boot smoke deployment onto a real, single RHEL VM (see scripts/deploy-rhel-vm.sh).
+# Everything else (mariadb, nginx, firewall, selinux, CIS L2 hardening, backups,
+# local-only auth) stays at group_vars/all.yml defaults — this file only adds a
+# placeholder connection so the declarative connections role has something to
+# provision. It intentionally points at localhost:3389 with no real RDP server
+# listening there — the point of this pass is to confirm the appliance itself
+# comes online end-to-end, not that the RDP hop succeeds.
+guac_custom_login_enabled: true
+guac_custom_login:
+  show_local_auth: true
+  show_oidc_auth: false   # SSO not enabled on this VM yet
+  app_title: "Guacamole - Remote Access"
+
+guac_connections:
+  - name: "localhost (RDP)"
+    parent: "ROOT"
+    protocol: "rdp"
+    parameters:
+      hostname: "127.0.0.1"
+      port: "3389"
+      security: "any"
+      ignore-cert: "true"
+      username: "localadmin"
+      password: "placeholder"

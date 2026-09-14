@@ -8,7 +8,9 @@ map $http_upgrade $connection_upgrade {
 
 server {
     listen 443 ssl default_server;
+{% if guac_ipv6_available | default(false) %}
     listen [::]:443 ssl default_server;
+{% endif %}
     server_name {{ guac_proxy_site }};
 
     ssl_certificate     {{ guac_ssl_cert_dir }}/{{ guac_proxy_site }}.crt;
@@ -48,7 +50,9 @@ server {
 # TLS cert for *.{{ guac_ssl_auth_domain }}; this reuses the self-signed cert.
 server {
     listen 443 ssl;
+{% if guac_ipv6_available | default(false) %}
     listen [::]:443 ssl;
+{% endif %}
     server_name {{ guac_ssl_auth_domain }} *.{{ guac_ssl_auth_domain }};
 
     ssl_certificate     {{ guac_ssl_cert_dir }}/{{ guac_proxy_site }}.crt;
@@ -81,7 +85,9 @@ server {
 
 server {
     listen 80 default_server;
+{% if guac_ipv6_available | default(false) %}
     listen [::]:80 default_server;
+{% endif %}
     server_name _;
     return 301 https://$host$request_uri;
 }

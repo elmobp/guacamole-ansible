@@ -10,6 +10,22 @@
   ansible.builtin.include_tasks: debian.yml
   when: ansible_os_family == "Debian"
 
+# --- Live FIPS detection -----------------------------------------------
+# Independent of guac_fips_enabled (which is this playbook's OWN opt-in to
+# *turn on* FIPS): a host can already be FIPS-enabled before we ever touch it
+# (org-mandated image/kickstart). Roles that hardcode non-FIPS-approved
+# algorithms (e.g. curve25519/chacha20-poly1305 in SSH KEX/ciphers) need to
+# know the kernel's actual live state, not just our toggle.
+- name: Check live kernel FIPS state
+  ansible.builtin.command: cat /proc/sys/crypto/fips_enabled
+  changed_when: false
+  failed_when: false
+  register: _fips_live
+
+- name: Set live FIPS fact
+  ansible.builtin.set_fact:
+    guac_fips_active: "{{ (_fips_live.stdout | default('0') | trim == '1') or (guac_fips_enabled | bool) }}"
+
 # --- Hostname / local DNS (optional) ---------------------------------------
 - name: Set hostname
   ansible.builtin.hostname:
