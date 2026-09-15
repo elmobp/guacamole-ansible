@@ -26,6 +26,22 @@
   ansible.builtin.set_fact:
     guac_fips_active: "{{ (_fips_live.stdout | default('0') | trim == '1') or (guac_fips_enabled | bool) }}"
 
+# --- Container detection -------------------------------------------------
+# A handful of sysctls (kernel.kptr_restrict, fs.suid_dumpable, ...) are
+# host-global rather than per-namespace: writing them from inside a container
+# either fails outright or silently no-ops depending on the runtime's
+# privilege level, so the live value never actually matches what we asked
+# for and every subsequent run reports changed=true forever. Only live-reload
+# sysctls on a real host; still write the config file everywhere so a real
+# boot (or a more privileged runtime) converges them correctly.
+- name: Set container-detection fact
+  ansible.builtin.set_fact:
+    guac_in_container: >-
+      {{ (guac_container_build | bool)
+         or (ansible_virtualization_type | default('') in
+             ['container', 'podman', 'docker', 'lxc', 'systemd-nspawn', 'wsl'])
+         or ('container' in (ansible_virtualization_tech_guest | default([]))) }}
+
 # --- Hostname / local DNS (optional) ---------------------------------------
 - name: Set hostname
   ansible.builtin.hostname:

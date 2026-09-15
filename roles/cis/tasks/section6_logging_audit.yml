@@ -207,6 +207,11 @@
         - { k: admin_space_left_action, v: "{{ guac_cis_auditd_admin_space_left_action }}" }
         - { k: disk_full_action, v: "{{ guac_cis_auditd_disk_full_action }}" }
         - { k: disk_error_action, v: "{{ guac_cis_auditd_disk_error_action }}" }
+        # Debian/Ubuntu ship "log_group = adm" — auditd re-applies this group
+        # (and a 0750 mode) to /var/log/audit on every successful start,
+        # fighting the 0700/root-only mode 6.3.4 sets below forever. "root"
+        # keeps the setting valid while matching the 0700/root:root we want.
+        - { k: log_group, v: "root" }
       failed_when: false
       notify: Restart auditd (cis)
 
@@ -266,6 +271,13 @@
         replace: '# -D  # disabled by Ansible (ansible-guacamole): would delete the CIS rules'
       failed_when: false
       notify: Restart auditd (cis)
+
+    # Flush now: restarting auditd (queued above when the rule set/'-D'
+    # neutralisation changes) can reset /var/log/audit's directory mode to
+    # auditd's own compiled-in default. Apply our permissions after that
+    # restart, not before, so nothing downstream reverts them.
+    - name: Flush handlers (auditd restart before permissions)
+      ansible.builtin.meta: flush_handlers
 
     - name: "6.3.4 — audit log and tool permissions"
       ansible.builtin.file:

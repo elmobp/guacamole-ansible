@@ -16,3 +16,4 @@ rules:
 ignore: |
   .github/
   container/
+  docs/data/

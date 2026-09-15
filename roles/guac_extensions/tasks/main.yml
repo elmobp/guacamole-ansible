@@ -275,7 +275,13 @@
     chdir: "{{ guac_build_dir }}/guacamole-custom-login"
   when:
     - guac_custom_login_enabled | bool
-    - (_cl_checkout.changed | default(false)) or (_cl_sync_script.changed | default(false)) or (_cl_sync.changed | default(false)) or (_cl_config.changed | default(false)) or (_cl_sync_logo.changed | default(false)) or (_cl_logo.changed | default(false))
+    - >-
+      (_cl_checkout.changed | default(false)) or
+      (_cl_sync_script.changed | default(false)) or
+      (_cl_sync.changed | default(false)) or
+      (_cl_config.changed | default(false)) or
+      (_cl_sync_logo.changed | default(false)) or
+      (_cl_logo.changed | default(false))
   changed_when: true
 
 - name: Install custom-login branding jar

@@ -25,7 +25,7 @@
         value: "{{ item.v }}"
         sysctl_file: /etc/sysctl.d/90-guac-hardening.conf
         state: present
-        reload: "{{ not (guac_container_build | bool) }}"
+        reload: "{{ not (guac_in_container | default(guac_container_build) | bool) }}"
       loop:
         - { k: net.ipv4.conf.all.rp_filter, v: "1" }
         - { k: net.ipv4.conf.default.rp_filter, v: "1" }

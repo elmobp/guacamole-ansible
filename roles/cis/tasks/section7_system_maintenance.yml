@@ -39,7 +39,7 @@
     cmd: >-
       set -o pipefail;
       find / -xdev -not -path '/proc/*' -not -path '/sys/*' -type f -perm -0002
-      2>/dev/null | head -200
+      2>/dev/null | sort | head -200
     executable: /bin/bash
   register: _cis_ww_files
   changed_when: false
@@ -59,7 +59,7 @@
     cmd: >-
       set -o pipefail;
       find / -xdev -not -path '/proc/*' -not -path '/sys/*' \( -nouser -o -nogroup \)
-      2>/dev/null | head -200
+      2>/dev/null | sort | head -200
     executable: /bin/bash
   register: _cis_unowned
   changed_when: false

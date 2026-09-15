@@ -46,9 +46,13 @@
 
 - name: "1.1.2 — report mount points that are not separate partitions"
   ansible.builtin.set_fact:
+    # `difference` is set-based internally, so its output order depends on
+    # Python's per-process hash randomization — sort explicitly or the report
+    # (and its idempotence) varies across separate ansible-playbook runs for
+    # no real reason.
     cis_missing_partitions: >-
-      {{ ['/tmp', '/var', '/var/tmp', '/var/log', '/var/log/audit', '/home']
-         | difference(ansible_mounts | map(attribute='mount') | list) }}
+      {{ (['/tmp', '/var', '/var/tmp', '/var/log', '/var/log/audit', '/home']
+          | difference(ansible_mounts | map(attribute='mount') | list)) | sort }}
 
 # --- 1.2 package management -----------------------------------------------
 - name: "1.2.1 — dnf gpgcheck enforced globally (RedHat)"

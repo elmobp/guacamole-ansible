@@ -23,11 +23,7 @@
   ansible.builtin.set_fact:
     cis_skip_re: "^(?:{{ guac_cis_exclusions | default([]) | map('string') | map('regex_escape') | join('|') }})(?:\\.|$)"
     cis_l2: "{{ (guac_cis_level | default('l2') | lower) == 'l2' }}"
-    cis_in_container: >-
-      {{ (guac_container_build | bool)
-         or (ansible_virtualization_type | default('') in
-             ['container', 'podman', 'docker', 'lxc', 'systemd-nspawn', 'wsl'])
-         or ('container' in (ansible_virtualization_tech_guest | default([]))) }}
+    cis_in_container: "{{ guac_in_container | default(guac_container_build) | bool }}"
 
 - name: Announce the benchmark being applied
   ansible.builtin.debug:
@@ -51,6 +47,7 @@
     - /etc/sudoers.d
     - /etc/audit/rules.d
     - /etc/systemd/journald.conf.d
+    - /etc/systemd/coredump.conf.d
 
 - name: "Section 1 — initial setup"
   ansible.builtin.include_tasks: section1_initial_setup.yml
